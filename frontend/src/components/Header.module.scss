@@ -1,0 +1,61 @@
+/* Module内では基本ここに global は置かないのがおすすめ。
+   でも今は「とりあえず動く」優先なら残してOK */
+* {
+  box-sizing: border-box;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+
+  width: 100%;
+  height: 64px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 12px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+
+  .left,
+  .right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .title {
+    font-weight: 700;
+    font-size: 20px;
+  }
+
+  .iconBtn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 30px;
+    margin-right: 5px;
+    margin-bottom: 5px;
+
+
+    &:hover {
+      opacity: 0.85;
+    }
+
+    &:active {
+      transform: translateY(0.5px);
+    }
+  }
+
+  .select {
+    height: 32px;
+    width: 130px;
+    padding: 0 8px;
+    margin-right: 20px;
+  }
+}
