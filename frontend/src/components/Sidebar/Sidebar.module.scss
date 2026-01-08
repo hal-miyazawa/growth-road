@@ -1,0 +1,176 @@
+// ==============================
+// レイアウト用の定数
+// ==============================
+
+// ヘッダーの高さ（ヘッダー＋下線込み）
+// Sidebarの開始位置や backdrop の位置計算に使う
+$header-h: 63px;
+
+// サイドバーが閉じている時の幅（アイコンのみ）
+$collapsed-w: 68px;
+
+// サイドバーが開いた時の幅
+$expanded-w: 250px;
+
+
+// ==============================
+// Sidebar 本体
+// ==============================
+.sidebar {
+  // 画面に固定して常に表示
+  position: fixed;
+  top: $header-h;
+  left: 0;
+
+  // ヘッダーを除いた高さを確保
+  height: calc(100vh - #{$header-h});
+
+  background: #fff;
+  border-right: 1px solid #ddd;
+
+  // backdrop より前に表示するため
+  z-index: 20;
+
+  // 開閉時の横幅アニメーション
+  transition: width 160ms ease;
+
+  // 折りたたみ時にラベルがはみ出ないようにする
+  overflow: hidden;
+}
+
+/* ハンバーガー押下時用の透明の幕 */
+.backdrop {
+  position: fixed;
+  top: $header-h;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  background: rgba(0,0,0,0.0); 
+  z-index: 20;                  // mainより上、sidebarより下
+}
+
+
+// ==============================
+// 折りたたみ状態
+// ==============================
+.collapsed {
+  // アイコンだけ見える幅
+  width: $collapsed-w;
+  border-right: none;
+
+  &:hover {
+    width: $expanded-w;
+    border-right: 1px solid #ddd;
+  }
+}
+
+
+// ==============================
+// 展開状態
+// ==============================
+.expanded {
+  width: $expanded-w;
+}
+
+
+// ==============================
+// ナビゲーション全体
+// ==============================
+.nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 6px;
+}
+
+
+// ==============================
+// ナビゲーションアイテム
+// ==============================
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  width: 100%;
+  padding: 5px 13px;
+
+  // buttonのデフォルトスタイルを消す
+  border: 0;
+  background: transparent;
+
+  border-radius: 12px;
+  cursor: pointer;
+
+  // テキストを左寄せ
+  text-align: left;
+
+  // 親からフォント設定を継承
+  font: inherit;
+
+  // hover時のフィードバック
+  &:hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
+}
+
+
+// ==============================
+// アクティブな項目
+// ==============================
+.active {
+  // 選択中が一目で分かるように
+  background: #e6e6e6;
+}
+
+
+// ==============================
+// アイコン部分
+// ==============================
+.icon {
+  // タップしやすいサイズを確保
+  width: 38px;
+  height: 38px;
+
+  // 中央揃え
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+}
+
+
+// ==============================
+// ラベル（テキスト）
+// ==============================
+
+// 通常表示状態
+.label {
+  // 折り返さない
+  white-space: nowrap;
+
+  font-size: 18px;
+  font-weight: 700;
+
+  opacity: 1;
+
+  // 表示／非表示のアニメーション
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+
+// ==============================
+// 折りたたみ時のラベル非表示
+// ==============================
+.collapsed .label {
+  // 見えなくする
+  opacity: 0;
+}
+
+
+// ==============================
+// hover時はラベルを表示（PC用）
+// ==============================
+.collapsed:hover .label {
+  opacity: 1;
+}

@@ -1,0 +1,410 @@
+/* =========================================================
+  ProjectModal.module.scss
+  目的：
+  - 画面全体を暗くする backdrop + 中央に modal
+  - 上部：ラベル / ピン / 閉じる
+  - 中央：プロジェクト名入力
+  - 下部：タスクの「タイムライン」
+    - 縦線は1本だけ（.timeline::before）
+    - 〇(dot)は開始点・終了点のみ
+    - タスクカードは線の上に重なる（z-index管理）
+========================================================= */
+
+/* =========================
+   Variables（見た目の共通値）
+========================= */
+/* 〇（開始点/終了点）の直径 */
+$dot: 22px;
+/* 縦線の太さ */
+$lineW: 8px;
+/* （もし下部に+を置く場合の）ボタンサイズ */
+$addSize: 70px;
+/* タスク間の縦の間隔 */
+$gap: 28px;
+/* タイムライン上部の余白（線の開始位置計算に使う） */
+$padTop: 16px;
+
+/* =========================
+   Backdrop / Modal（モーダル全体の土台）
+========================= */
+
+/* 背景の暗い幕：画面全体を覆う */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1000;
+
+  /* 中央に modal を配置 */
+  display: grid;
+  place-items: center;
+}
+
+/* 白いモーダル本体 */
+.modal {
+  width: min(800px, 92vw);
+  max-height: min(760px, 86vh);
+
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
+
+  overflow: hidden; /* ← これが重要：角丸で切る */
+  position: relative;
+}
+
+.modalInner {
+  max-height: min(760px, 86vh);
+  overflow: auto;
+
+  padding: 26px 28px 22px;
+
+  /* スクロールバー含めて角丸に沿わせる */
+  border-radius: inherit;
+}
+
+/* =========================
+   Top Row（上段：ラベル / ピン / 閉じる）
+========================= */
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 「ラベル▼」ボタン */
+.labelBtn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+
+  padding: 6px 8px;
+  border-radius: 10px;
+
+  /* hover：薄い背景 */
+  &:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+
+  /* キーボード操作時のフォーカス */
+  &:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 2px;
+  }
+}
+
+/* ▼の見た目 */
+.caret {
+  margin-left: 6px;
+  font-size: 16px;
+  opacity: 0.8;
+}
+
+/* 右上のアイコン群（📌 と ✕） */
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 丸いアイコンボタン */
+.iconBtn {
+  width: 40px;
+  height: 40px;
+
+  display: grid;
+  place-items: center;
+
+  border: none;
+  background: transparent;
+  cursor: pointer;
+
+  font-size: 22px;
+  border-radius: 999px;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+  &:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 2px;
+  }
+}
+
+/* =========================
+   Project Name（プロジェクト名入力）
+========================= */
+
+.projectNameRow {
+  margin-top: 18px;
+  display: grid;
+  justify-items: center;
+}
+
+/* プロジェクト名入力（中央寄せ・下線付き想定） */
+.projectNameInput {
+  width: min(520px, 86%);
+  border: none;
+  outline: none;
+  background: transparent;
+
+  text-align: center;
+  font-size: 38px;
+  font-weight: 700;
+  color: #777;
+
+  &::placeholder {
+    color: #aaa;
+  }
+}
+
+/* 入力の下線 */
+.projectUnderline {
+  margin-top: 10px;
+  width: min(400px, 86%);
+  height: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 999px;
+}
+
+/* =========================
+   Timeline（縦線 + 開始/終了の〇）
+========================= */
+
+/* タイムラインのラッパー */
+.timeline {
+
+    /* 追加：カード幅（レスポンシブ） */
+    --card-w: min(420px, 70vw);
+    --card-half: calc(var(--card-w) / 2);
+
+    position: relative; /* ::before(縦線) の基準 */
+    margin-top: 22px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    /* 〇 / リスト / 〇 / （+など）の縦間隔 */
+    gap: $gap;
+
+    /* 上下に余白（線の開始/終了計算と合わせる） */
+    padding: 16px 0;
+
+  /* 縦線：この1本だけで「タイムライン感」を作る */
+  &::before {
+    content: "";
+    position: absolute;
+
+    /* 真ん中に固定 */
+    left: 50%;
+    transform: translateX(-50%);
+
+    width: $lineW;
+    background: #111;
+    border-radius: 999px;
+
+    /* ---------------------------------------------
+      線の開始位置（top）：
+      - タイムラインのpadding-top($padTop)から
+      - 開始dotの「中心」まで伸ばしたいので dot/2 を足す
+      ＝「〇の中心」から線が始まるイメージ
+    --------------------------------------------- */
+    top: calc(#{$padTop} + #{$dot} / 2);
+
+    /* ---------------------------------------------
+      線の終了位置（bottom）：
+      - 〇で終わらせたいなら「dot/2」が基本
+      - ここがズレると「線が〇を貫く/届かない」になる
+      ※いま bottom: $dot になってるので、必要なら
+         bottom: calc(#{$dot} / 2);
+         にすると中心一致になりやすい
+    --------------------------------------------- */
+    bottom: $dot;
+
+    /* 線は一番下に */
+    z-index: 0;
+  }
+}
+
+/* 開始点/終了点の〇 */
+.dot {
+  width: $dot;
+  height: $dot;
+  border-radius: 999px;
+  background: #d9d9d9;
+
+  /* 〇は線より前面 */
+  z-index: 2;
+
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+/* =========================
+   Task List（カード一覧）
+========================= */
+
+.list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: $gap;
+  z-index: 1;
+}
+
+/* ✅ gridをやめて「カード中心固定」用の土台にする */
+.item {
+  position: relative;
+  min-height: 120px; /* taskCardの高さと同じ */
+}
+
+/* ✅ カードは常に線(50%)の中心に置く */
+.taskCard {
+  width: var(--card-w);
+  height: 100px;
+
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+
+  border-radius: 28px;
+  /* ✅ 白背景 + 枠線 */
+  background: #fff;
+  border: 3px solid rgba(0, 0, 0, 0.22);
+
+  display: grid;
+  place-items: center;
+
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  z-index: 1; /* 線より上 */
+}
+
+/* ✅ 右のボタンはカードの右に「別配置」 */
+.itemRight {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + var(--card-half) + 8px);
+  transform: translateY(-50%);
+
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+/* タスク名入力 */
+.taskInput {
+  width: 70%;
+  border: none;
+  outline: none;
+  background: transparent;
+
+  text-align: center;
+  font-size: 40px;
+  font-weight: 400;
+  color: #777;
+
+  &::placeholder {
+    color: #aaa;
+  }
+}
+
+
+
+/* =========================
+   Buttons（右側操作ボタン系）
+========================= */
+
+/* 右側の共通：⋮ / -（見た目揃える） */
+.moreBtn,
+.removeBtn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+
+  font-size: 42px;
+  line-height: 1;
+
+  padding: 6px 8px;
+  border-radius: 10px;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+  &:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 2px;
+  }
+}
+
+/* 行内の＋：removeBtnと同じ見た目で使う */
+.addInlineBtn {
+  @extend .removeBtn;
+}
+
+/* （もし下に置く＋を残すなら）丸い＋ボタン */
+.addBtn {
+  width: $addSize;
+  height: $addSize;
+
+  display: grid;
+  place-items: center;
+
+  border: none;
+  background: #fff;
+  cursor: pointer;
+
+  font-size: 72px;
+  line-height: 1;
+  border-radius: 999px;
+
+  /* 線より前面に */
+  z-index: 2;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.92);
+  }
+  &:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 2px;
+  }
+}
+
+/* =========================
+   Footer（保存ボタン）
+========================= */
+
+.footer {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 保存ボタン */
+.saveBtn {
+  border: none;
+  cursor: pointer;
+
+  background: #444;
+  color: #fff;
+
+  font-size: 22px;
+  padding: 10px 22px;
+  border-radius: 10px;
+
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+
+  &:hover {
+    filter: brightness(0.95);
+  }
+  &:active {
+    transform: translateY(1px);
+  }
+  &:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 2px;
+  }
+}

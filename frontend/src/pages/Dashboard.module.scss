@@ -1,0 +1,12 @@
+.page {
+  padding: 50px  0px 0px 200px;
+}
+
+.grid {
+  display: grid;
+  gap: 28px;
+
+  /* 220pxカードが横に並び、足りなければ折り返す */
+  grid-template-columns: repeat(auto-fill, minmax(220px, 220px));
+  justify-content: start;
+}
