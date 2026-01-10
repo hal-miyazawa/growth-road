@@ -19,7 +19,7 @@
   &:hover {
     transform: translateY(-1px);
     box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
-    background: #e9eaee; /* ← ホバーで薄グレー */
+    background: #e9eaee;
   }
 
   &:active {
@@ -31,10 +31,9 @@
 /* 上の色バー */
 .top {
   height: 45px;
-  position: relative; /* ← ピンと左上ラベルを重ねるため必須 */
+  position: relative;
   transition: filter 140ms ease;
 }
-
 
 /* 中央タイトル */
 .title {
@@ -50,10 +49,9 @@
   white-space: nowrap;
 }
 
-/* 四隅の要素は「ホバー時だけ表示」 */
+/* 四隅の要素は「カードhover時だけ表示」 */
 .topLeft,
 .pinBtn,
-.bottomLeftBtn,
 .bottomRightBtn {
   opacity: 0;
   transition: opacity 120ms ease;
@@ -61,7 +59,6 @@
 
 .card:hover .topLeft,
 .card:hover .pinBtn,
-.card:hover .bottomLeftBtn,
 .card:hover .bottomRightBtn {
   opacity: 1;
 }
@@ -69,12 +66,57 @@
 /* 左上：プロジェクト名（色バー上） */
 .topLeft {
   position: absolute;
-  top: 8px;
+  top: 10px;
   left: 10px;
 
   font-size: 18px;
   font-weight: 700;
   color: rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+
+  cursor: pointer;
+
+  transform-origin: left top;
+  transition: opacity 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+/* project用：文字ホバーで濃く＆少し拡大 */
+.card:hover .topLeft:hover {
+  color: rgba(0, 0, 0, 0.55);
+  transform: scale(1.06);
+}
+
+/* solo用：上の色バーをホバーした時だけ出る文字（見た目は.topLeftと同じ） */
+.topHoverText {
+  position: absolute;
+  top: 2px;
+  left: 8px;
+
+  font-size: 30px;
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+
+  opacity: 0;
+
+  /* ★重要：hover/clickできるように */
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 2;
+
+  transform-origin: left top;
+  transition: opacity 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+/* data-hover="1" があるカードだけ、topホバーで表示 */
+.top[data-hover="1"]:hover .topHoverText {
+  opacity: 1;
+}
+
+/* solo用：文字ホバーで濃く＆少し拡大 */
+.top[data-hover="1"]:hover .topHoverText:hover {
+  color: rgba(0, 0, 0, 0.55);
+  transform: scale(1.06);
 }
 
 /* 右上：ピン（色バー上） */
@@ -91,23 +133,14 @@
   padding: 0;
   cursor: pointer;
 
-  /* 見やすさ少し上げる */
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.15));
+
+  transform-origin: center;
+  transition: opacity 120ms ease, transform 120ms ease;
 }
 
-/* 左下：ツリー */
-.bottomLeftBtn {
-  position: absolute;
-  left: 5px;
-  bottom: 5px;
-
-  width: 40px;
-  height: 40px;
-
-  border: 0;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
+.card:hover .pinBtn:hover {
+  transform: scale(1.12);
 }
 
 /* 右下：チェックボタン（カードhoverで○が出る → ○hoverで✓が出る） */
@@ -128,15 +161,18 @@
   place-items: center;
   cursor: pointer;
 
-  /* クリック感 */
-  transition: transform 140ms ease, background 140ms ease, opacity 120ms ease;
-
-  /* カードhoverするまで非表示（既存の hover 表示ルールと合わせる） */
   opacity: 0;
+
+  transform-origin: center;
+  transition: transform 140ms ease, background 140ms ease, opacity 120ms ease;
 }
 
 .card:hover .bottomRightBtn {
-  opacity: 1; /* ← カードホバーで○が出る */
+  opacity: 1;
+}
+
+.card:hover .bottomRightBtn:hover {
+  transform: scale(1.08);
 }
 
 .bottomRightBtn:hover {

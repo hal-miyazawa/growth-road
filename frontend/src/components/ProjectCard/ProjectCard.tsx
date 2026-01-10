@@ -1,3 +1,4 @@
+import type { KeyboardEventHandler } from "react";
 import styles from "./ProjectCard.module.scss";
 
 type Props = {
@@ -8,8 +9,10 @@ type Props = {
   onClick?: () => void;
 
   onTogglePin?: () => void;
-  onOpenTree?: () => void;
   onComplete?: () => void;
+
+  // 上の色部分ホバーで出す文字（solo用）
+  topHoverText?: string;
 };
 
 export default function ProjectCard({
@@ -19,10 +22,10 @@ export default function ProjectCard({
   pinned = false,
   onClick,
   onTogglePin,
-  onOpenTree,
   onComplete,
+  topHoverText,
 }: Props) {
-  const handleKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
+  const handleKeyDown: KeyboardEventHandler<HTMLDivElement> = (e) => {
     if (!onClick) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -38,12 +41,16 @@ export default function ProjectCard({
       onClick={onClick}
       onKeyDown={handleKeyDown}
     >
-      {/* 上の色バー */}
-      <div className={styles.top} style={{ backgroundColor: color }}>
-        {/* 左上：プロジェクト名 */}
-        <div className={styles.topLeft}>{projectName}</div>
+      <div
+        className={styles.top}
+        style={{ backgroundColor: color }}
+        data-hover={topHoverText ? "1" : "0"}
+      >
+        {/* project の時だけ表示（soloなら空文字を出さない） */}
+        {projectName && <div className={styles.topLeft}>{projectName}</div>}
 
-        {/* 右上：ピン */}
+        {topHoverText && <div className={styles.topHoverText}>{topHoverText}</div>}
+
         <button
           type="button"
           className={styles.pinBtn}
@@ -58,23 +65,8 @@ export default function ProjectCard({
         </button>
       </div>
 
-      {/* 中央タイトル（常に表示） */}
       <div className={styles.title}>{title}</div>
 
-      {/* 左下：ツリー */}
-      <button
-        type="button"
-        className={styles.bottomLeftBtn}
-        aria-label="ツリー"
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpenTree?.();
-        }}
-      >
-        <TreeIcon />
-      </button>
-
-      {/* 右下：完了チェック */}
       <button
         type="button"
         className={styles.bottomRightBtn}
@@ -100,34 +92,6 @@ function PinIcon() {
         strokeWidth="2.4"
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function TreeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className={styles.icon} aria-hidden="true">
-      <path
-        d="M6 6h7M6 12h12M6 18h7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <path
-        d="M6 6v12"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <path
-        d="M14 6v6M18 12v6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
       />
     </svg>
   );

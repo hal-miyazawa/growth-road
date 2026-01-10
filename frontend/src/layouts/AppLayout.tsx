@@ -1,27 +1,51 @@
 import { useState } from "react";
-import Header from "../components/Header/Header"; 
+import Header from "../components/Header/Header";
 import Sidebar from "../components/Sidebar/Sidebar";
-import type { TabKey } from "../components/Sidebar/navItems";
+import type { ID, Label } from "../types/models";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [tab, setTab] = useState<TabKey>("home");
+type Props = {
+  children: React.ReactNode;
+
+  // ラベルフィルタ（Dashboardから渡す）
+  labels: Label[];
+  selectedLabelId: ID | null;
+  onSelectLabel: (id: ID | null) => void;
+  onAddLabel: (name: string) => void;
+
+  // （任意）履歴を開く処理を外から渡したいなら追加できる
+  // onOpenHistory?: () => void;
+};
+
+export default function AppLayout({
+  children,
+  labels,
+  selectedLabelId,
+  onSelectLabel,
+  onAddLabel,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <Header title="GrowthRoad"  onMenuClick={() => setOpen((v) => !v)} />
+      <Header title="GrowthRoad" onMenuClick={() => setOpen((v) => !v)} />
 
       <Sidebar
-        active={tab}
         open={open}
         onClose={() => setOpen(false)}
-        onChange={setTab}
+        labels={labels}
+        selectedLabelId={selectedLabelId}
+        onSelectLabel={onSelectLabel}
+        onAddLabel={(name) => {
+          onAddLabel(name);
+          // 追加後もサイドバーは閉じない（入力継続しやすい）
+          // 閉じたいなら setOpen(false) を入れる
+        }}
+        onOpenHistory={() => {
+          console.log("history");
+        }}
       />
 
-      {/* ここが大事：children を出す */}
-      <main>
-        {children}
-      </main>
+      <main>{children}</main>
     </>
   );
 }

@@ -1,70 +1,168 @@
-
+import { useEffect, useRef, useState } from "react";
 import styles from "./Sidebar.module.scss";
+import type { ID, Label } from "../../types/models";
 
-// ナビゲーション項目の定義と、タブキーの型
-import { navItems, type TabKey } from "./navItems";
-
-// Sidebarコンポーネントが受け取るpropsの型定義
 type Props = {
-  // 現在アクティブなタブ
-  active: TabKey;
-
-  // サイドバーが開いているかどうか
   open: boolean;
-
-  // サイドバーを閉じる処理
   onClose: () => void;
 
-  // タブが切り替わったときの処理
-  onChange: (key: TabKey) => void;
+  labels: Label[];
+  selectedLabelId: ID | null; // null = 全部表示
+  onSelectLabel: (id: ID | null) => void;
+
+  onOpenHistory?: () => void;
+
+  /**
+   * ★変更：ラベル名を受け取って親（Dashboard）で labels に追加する
+   * - Sidebar は「入力→確定」まで担当
+   * - 実際の labels 更新は親がやる（DB/APIにも繋げやすい）
+   */
+  onAddLabel: (name: string) => void;
 };
 
-// Sidebarコンポーネント本体
-export default function Sidebar({ active, open, onClose, onChange }: Props) {
+export default function Sidebar({
+  open,
+  onClose,
+  labels,
+  selectedLabelId,
+  onSelectLabel,
+  onOpenHistory,
+  onAddLabel,
+}: Props) {
+  // 追加モード（ラベル追加行が input に変形）
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // ★追加：入力中は強制的にexpanded扱い
+  const expanded = open || adding;
+
+  // 追加モードになったらフォーカス
+  useEffect(() => {
+    if (adding) inputRef.current?.focus();
+  }, [adding]);
+
+  const commit = () => {
+    const name = draft.trim();
+    setAdding(false);
+    setDraft("");
+
+    if (!name) return; // 空なら何もしない（=キャンセル）
+    onAddLabel(name);
+  };
+
+  const cancel = () => {
+    setAdding(false);
+    setDraft("");
+  };
+
   return (
     <>
-      {/* 
-        サイドバーが開いている時だけ表示される背景（オーバーレイ）
-        クリックするとサイドバーを閉じる
-      */}
-      {open && <div className={styles.backdrop} onClick={onClose} />}
+      {expanded && (
+        <div
+          className={styles.backdrop}
+          onClick={() => {
+            // 入力中ならキャンセルしてから閉じる
+            setAdding(false);
+            setDraft("");
+            onClose();
+          }}
+        />
+      )}
 
-      {/*
-        サイドバー本体
-        open が true の時は expanded（展開）
-        false の時は collapsed（閉じた状態）
-      */}
       <aside
         className={`${styles.sidebar} ${
-          open ? styles.expanded : styles.collapsed
+          expanded ? styles.expanded : styles.collapsed
         }`}
       >
-        {/* ナビゲーション領域 */}
         <nav className={styles.nav}>
-          {/* navItems を元にボタンを動的生成 */}
-          {navItems.map((item) => (
+          {/* 総合（固定） */}
+          <button
+            type="button"
+            className={`${styles.item} ${
+              selectedLabelId === null ? styles.active : ""
+            }`}
+            onClick={() => {
+              onSelectLabel(null);
+              onClose();
+            }}
+          >
+            <span className={styles.icon}>▦</span>
+            <span className={styles.label}>総合</span>
+          </button>
+
+          {/* ラベル一覧 */}
+          {labels.map((l) => (
             <button
-              // Reactでのリスト描画に必要なkey
-              key={item.key}
-              // アクティブなタブなら active クラスを付与
+              key={l.id}
+              type="button"
               className={`${styles.item} ${
-                active === item.key ? styles.active : ""
+                selectedLabelId === l.id ? styles.active : ""
               }`}
-              // クリック時の処理
               onClick={() => {
-                // タブを切り替える
-                onChange(item.key);
+                onSelectLabel(l.id);
                 onClose();
               }}
-              type="button"
-              >
-              {/* アイコン表示 */}
-              <span className={styles.icon}>{item.icon}</span>
-
-              {/* ラベル（テキスト）表示 */}
-              <span className={styles.label}>{item.label}</span>
+            >
+              <span className={styles.icon}>
+              <span
+                className={styles.colorChip}
+                style={{ backgroundColor: l.color ?? "#BDBDBD" }}
+                aria-hidden="true"
+              />
+            </span>
+              <span className={styles.label}>{l.name}</span>
             </button>
           ))}
+
+          {/* ★ラベル追加（末尾）：クリックで input に変形 */}
+          {!adding ? (
+            <button
+              type="button"
+              className={styles.item}
+              onClick={() => setAdding(true)}
+            >
+              <span className={styles.icon}>＋</span>
+              <span className={styles.label}>ラベル追加</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={styles.item}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className={styles.icon}>＋</span>
+
+              <input
+                ref={inputRef}
+                className={styles.inlineInput}
+                value={draft}
+                placeholder="新しいラベル名"
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commit();
+                  if (e.key === "Escape") cancel();
+                }}
+                // ★ここ重要：クリックでblur→commit事故を防ぐ
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                onBlur={() => commit()} // フォーカス外れで保存（空ならキャンセル）
+              />
+            </button>
+          )}
+
+          {/* 履歴（固定） */}
+          <button
+            type="button"
+            className={styles.item}
+            onClick={() => {
+              onOpenHistory?.();
+              onClose();
+            }}
+          >
+            <span className={styles.icon}>↩︎</span>
+            <span className={styles.label}>履歴</span>
+          </button>
         </nav>
       </aside>
     </>
