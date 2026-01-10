@@ -110,7 +110,9 @@ function findLabel(labels: Label[], labelId?: ID | null) {
 export default function Dashboard() {
   const [taskOpen, setTaskOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<ID | null>(null);
   const [selectedLabelId, setSelectedLabelId] = useState<ID | null>(null);
+  
   
 
   // DB/APIに置き換える時も、ここを置き換えるだけでOKな形
@@ -235,10 +237,24 @@ const projectCards = projects
     );
   };
 
-  // 完了：単体タスクは completed=true（表示から消える）
-  //      プロジェクトタスクは completed=true ＋ project.current_order_index を次へ
-  const completeTask = (card: (typeof cards)[number]) => {
-    if (!card.taskId) return;
+  const editingProject = useMemo(() => {
+    if (!editingProjectId) return null;
+    return projects.find((p) => p.id === editingProjectId) ?? null;
+  }, [editingProjectId, projects]);
+
+  const editingProjectTasks = useMemo(() => {
+    if (!editingProjectId) return null;
+
+    // ★ flatten じゃなくてプロジェクトの全タスクを渡す（親も子も group も）
+    return tasks
+      .filter((t) => t.project_id === editingProjectId)
+      .sort((a, b) => a.order_index - b.order_index);
+  }, [editingProjectId, tasks]);
+
+    // 完了：単体タスクは completed=true（表示から消える）
+    //      プロジェクトタスクは completed=true ＋ project.current_order_index を次へ
+    const completeTask = (card: (typeof cards)[number]) => {
+      if (!card.taskId) return;
 
     // 1) タスク完了
     setTasks((prev) =>
@@ -276,30 +292,41 @@ const projectCards = projects
       <div className={styles.page}>
         <div className={styles.grid}>
           {filteredCards.map((c) => (
-            <ProjectCard
-              key={c.id}
-              title={c.title}
-              projectName={c.kind === "solo" ? "" : c.projectName}   // ★soloは空
-              topHoverText={c.kind === "solo" ? "＋" : undefined} // ★soloだけ
-              color={c.color}
-              pinned={c.pinned}
-              onTogglePin={() => c.taskId && togglePin(c.taskId)}
-              onComplete={() => completeTask(c)}
-              onClick={() => {
-                setEditingTaskId(c.taskId);
-                setTaskOpen(true);
-              }}
-            />
+          <ProjectCard
+            key={c.id}
+            title={c.title}
+            projectName={c.kind === "solo" ? "" : c.projectName}
+            topHoverText={c.kind === "solo" ? "＋" : undefined}
+            color={c.color}
+            pinned={c.pinned}
+            onTogglePin={() => c.taskId && togglePin(c.taskId)}
+            onComplete={() => completeTask(c)}
+            onClick={() => {
+              setEditingTaskId(c.taskId);
+              setTaskOpen(true);
+            }}
+            onClickProjectName={
+              c.kind === "project"
+                ? () => {
+                    setEditingProjectId(c.projectId);
+                    setProjectOpen(true);
+                  }
+                : undefined
+            }
+          />
           ))}
         </div>
       </div>
 
       <FabMenu
         onCreateTask={() => {
-          setEditingTaskId(null);   // ★これ入れる
+          setEditingTaskId(null);
           setTaskOpen(true);
         }}
-        onCreateProject={() => setProjectOpen(true)}
+        onCreateProject={() => {
+          setEditingProjectId(null); // ★追加
+          setProjectOpen(true);
+        }}
       />
 
       <TaskModal
@@ -367,11 +394,51 @@ const projectCards = projects
 
       <ProjectModal
         open={projectOpen}
-        onClose={() => setProjectOpen(false)}
-        onSave={(project, newTasks) => {
-          setProjects((prev) => [...prev, project]);
-          setTasks((prev) => [...prev, ...newTasks]);
+        onClose={() => {
+          setProjectOpen(false);
+          setEditingProjectId(null);
         }}
+        project={editingProject}
+        tasks={editingProjectTasks}
+        onSave={(project, newTasks) => {
+          // 保存前の「現在の表示タスクID」を拾う
+          const prevProject = projects.find((p) => p.id === project.id) ?? null;
+          const prevIndex = prevProject?.current_order_index ?? 0;
+          const prevFlat = flatIdsByProject.get(project.id) ?? [];
+          const prevCurrentTaskId = prevFlat[prevIndex] ?? null;
+
+          setTasks((prev) => {
+            const kept = prev.filter((t) => t.project_id !== project.id);
+            return [...kept, ...newTasks];
+          });
+
+          setProjects((prev) => {
+            const exists = prev.some((p) => p.id === project.id);
+
+            // 保存後に同じIDが残ってたらその位置へ、無ければclamp
+            const nextIndex =
+              prevCurrentTaskId
+                ? newTasks.findIndex((t) => t.id === prevCurrentTaskId)
+                : -1;
+
+            const safeIndex =
+              nextIndex >= 0 ? nextIndex : Math.min(prevIndex, Math.max(0, newTasks.length - 1));
+
+            const nextProject: Project = {
+              ...project,
+              current_order_index: safeIndex,
+              updated_at: now(),
+            };
+
+            return exists
+              ? prev.map((p) => (p.id === project.id ? nextProject : p))
+              : [nextProject, ...prev];
+          });
+
+          setProjectOpen(false);
+          setEditingProjectId(null);
+        }}
+
       />
     </AppLayout>
   );

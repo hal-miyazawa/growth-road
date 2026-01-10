@@ -13,6 +13,10 @@ type Props = {
 
   // 上の色部分ホバーで出す文字（solo用）
   topHoverText?: string;
+
+  // ★追加：プロジェクト名クリック（編集用）
+  onClickProjectName?: () => void;
+  
 };
 
 export default function ProjectCard({
@@ -24,6 +28,7 @@ export default function ProjectCard({
   onTogglePin,
   onComplete,
   topHoverText,
+  onClickProjectName, // ★追加
 }: Props) {
   const handleKeyDown: KeyboardEventHandler<HTMLDivElement> = (e) => {
     if (!onClick) return;
@@ -47,7 +52,18 @@ export default function ProjectCard({
         data-hover={topHoverText ? "1" : "0"}
       >
         {/* project の時だけ表示（soloなら空文字を出さない） */}
-        {projectName && <div className={styles.topLeft}>{projectName}</div>}
+        {projectName && (
+          <button
+            type="button"
+            className={styles.topLeft}
+            onClick={(e) => {
+              e.stopPropagation(); // ★カードクリック（TaskModal）を止める
+              onClickProjectName?.();
+            }}
+          >
+            {projectName}
+          </button>
+        )}
 
         {topHoverText && <div className={styles.topHoverText}>{topHoverText}</div>}
 

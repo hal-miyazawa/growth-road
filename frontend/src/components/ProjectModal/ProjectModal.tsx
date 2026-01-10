@@ -5,44 +5,40 @@ import type { ID, Project, Task } from "../../types/models";
 type Props = {
   open: boolean;
   onClose: () => void;
-    // ★追加：保存時に親へ渡す
   onSave: (project: Project, tasks: Task[]) => void;
+
+  project?: Project | null;
+  tasks?: Task[] | null;
 };
 
 const uid = () => crypto.randomUUID?.() ?? String(Date.now() + Math.random());
 const now = () => new Date().toISOString();
 
 /**
- * ----------------------------------------
  * order_index を必ず 0..n-1 に整える（欠番/重複を絶対に作らない）
- * ----------------------------------------
- * - 同一(project_id, parent_task_id)内での順番が保証される前提。
- * - insert/remove/並び替えをしたあとに必ず通すと安全。
+ * ※ここでは「配列順」基準で正規化
  */
 function normalizeOrderIndex(list: Task[]): Task[] {
-  // ここでは「モーダル内の1プロジェクト」「ルート階層のみ」を想定してるので
-  // 単純に並び順＝配列順として 0..n-1 を振り直す。
-  // ※将来 parent_task_id も扱うなら、(parent_task_idごと)に groupBy して採番する。
+  const ts = now();
   return list.map((t, i) => ({
     ...t,
     order_index: i,
-    updated_at: now(),
+    updated_at: ts,
   }));
 }
 
-/**
- * 新規タスク（モーダル内）
- * - project_id は draftProject.id に合わせる
- * - parent_task_id は今は null（ルート階層）
- */
-function createDraftTask(projectId: ID, title = "タスク名"): Task {
+function createDraftTask(
+  projectId: ID,
+  title = "",
+  parentTaskId: ID | null = null
+): Task {
   const ts = now();
   return {
     id: uid(),
     project_id: projectId,
     label_id: null,
-    parent_task_id: null,
-    order_index: 0, // あとで normalize で整える
+    parent_task_id: parentTaskId,
+    order_index: 0,
     title,
     memo: null,
     completed: false,
@@ -53,19 +49,32 @@ function createDraftTask(projectId: ID, title = "タスク名"): Task {
   };
 }
 
-export default function ProjectModal({ open, onClose, onSave }: Props) {
-  /**
-   * ----------------------------------------
-   * draftProject（保存前の仮プロジェクト）
-   * ----------------------------------------
-   * - 本保存までは “モーダル内のローカル状態”
-   * - 保存時に親（Dashboardなど）へ渡す想定
-   */
+type ViewRow = {
+  t: Task;
+  depth: 0 | 1;
+  hasChildren: boolean;
+  isExpanded: boolean;
+};
+
+export default function ProjectModal({
+  open,
+  onClose,
+  onSave,
+  project,
+  tasks,
+}: Props) {
+  const [projectNameError, setProjectNameError] = useState<string | null>(null);
+  const [taskErrors, setTaskErrors] = useState<Record<ID, string | null>>({});
+  const [submitTried, setSubmitTried] = useState(false);
+
+  // 展開状態
+  const [expandedIds, setExpandedIds] = useState<Set<ID>>(new Set());
+
   const [draftProject, setDraftProject] = useState<Project>(() => {
     const ts = now();
     return {
       id: uid(),
-      name: "プロジェクト名",
+      name: "",
       label_id: null,
       current_order_index: 0,
       created_at: ts,
@@ -73,52 +82,63 @@ export default function ProjectModal({ open, onClose, onSave }: Props) {
     };
   });
 
-  /**
-   * ----------------------------------------
-   * draftTasks（保存前の仮タスク）
-   * ----------------------------------------
-   * - DB前提の Task 形で持つ
-   * - order_index は normalizeOrderIndex で必ず保証する
-   */
   const [draftTasks, setDraftTasks] = useState<Task[]>(() => {
-    const projectId = uid(); // 初期化時は一旦別IDを作り、直後に draftProject 側と揃える
-    return normalizeOrderIndex([
-      createDraftTask(projectId),
-      createDraftTask(projectId),
-      createDraftTask(projectId),
-    ]);
+    const projectId = uid();
+    return normalizeOrderIndex([createDraftTask(projectId), createDraftTask(projectId)]);
   });
 
-  /**
-   * open になった瞬間に、draftProject.id と draftTasks.project_id を揃える。
-   * （初期化関数の順序都合でIDがズレるのを防ぐ）
-   */
+  // open時に新規/編集で初期化
   useEffect(() => {
     if (!open) return;
 
-    // モーダルを開くたびに “新規作成状態にリセット” したいならここで初期化する
+    setSubmitTried(false);
+    setProjectNameError(null);
+    setTaskErrors({});
+    setExpandedIds(new Set());
+
     const ts = now();
+
+    // ===== 編集モード =====
+    if (project) {
+      setDraftProject({ ...project, updated_at: ts });
+
+      const base = (tasks ?? [])
+        .map((t) => ({ ...t }))
+        .sort((a, b) => a.order_index - b.order_index);
+
+      // root（parent_task_id=null）が2件未満なら追加して2件に
+      const rootCount = base.filter((t) => !t.parent_task_id).length;
+      const ensured =
+        rootCount >= 2
+          ? base
+          : [
+              ...base,
+              ...Array.from({ length: 2 - rootCount }, () =>
+                createDraftTask(project.id, "", null)
+              ),
+            ];
+
+      setDraftTasks(normalizeOrderIndex(ensured));
+      return;
+    }
+
+    // ===== 新規作成モード =====
     const newProjectId = uid();
-    const p: Project = {
+    setDraftProject({
       id: newProjectId,
-      name: "プロジェクト名",
+      name: "",
       label_id: null,
       current_order_index: 0,
       created_at: ts,
       updated_at: ts,
-    };
-    setDraftProject(p);
+    });
 
     setDraftTasks(
-      normalizeOrderIndex([
-        createDraftTask(newProjectId),
-        createDraftTask(newProjectId),
-        createDraftTask(newProjectId),
-      ])
+      normalizeOrderIndex([createDraftTask(newProjectId), createDraftTask(newProjectId)])
     );
-  }, [open]);
+  }, [open, project, tasks]);
 
-  // Esc で閉じる（開いてる時だけ）
+  // Escで閉じる
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -128,58 +148,190 @@ export default function ProjectModal({ open, onClose, onSave }: Props) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  /**
-   * ----------------------------------------
-   * 追加（insert）：指定タスクの直下に新規タスクを挿入
-   * ----------------------------------------
-   * - insert → normalize で order_index を必ず整える
-   */
+  // 親ID -> 子の配列（表示/展開用）
+  const childrenByParent = useMemo(() => {
+    const byOrder = (a: Task, b: Task) => a.order_index - b.order_index;
+    const map = new Map<ID, Task[]>();
+    for (const t of draftTasks) {
+      if (!t.parent_task_id) continue;
+      const arr = map.get(t.parent_task_id) ?? [];
+      arr.push(t);
+      map.set(t.parent_task_id, arr);
+    }
+    for (const [pid, arr] of map) {
+      arr.sort(byOrder);
+      map.set(pid, arr);
+    }
+    return map;
+  }, [draftTasks]);
+
+  const roots = useMemo(() => {
+    return [...draftTasks]
+      .filter((t) => !t.parent_task_id)
+      .sort((a, b) => a.order_index - b.order_index);
+  }, [draftTasks]);
+
+  const hasChildren = (id: ID) => (childrenByParent.get(id)?.length ?? 0) > 0;
+
+  // ✅ 「表示する行」だけを作る（root + 展開中の子）
+  const viewRows: ViewRow[] = useMemo(() => {
+    const rows: ViewRow[] = [];
+    for (const r of roots) {
+      const rHas = hasChildren(r.id);
+      const rOpen = rHas && expandedIds.has(r.id);
+
+      rows.push({
+        t: r,
+        depth: 0,
+        hasChildren: rHas,
+        isExpanded: rOpen,
+      });
+
+      if (rOpen) {
+        const kids = childrenByParent.get(r.id) ?? [];
+        for (const c of kids) {
+          const cHas = hasChildren(c.id);
+          const cOpen = cHas && expandedIds.has(c.id);
+          rows.push({
+            t: c,
+            depth: 1,
+            hasChildren: cHas,
+            isExpanded: cOpen,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [roots, childrenByParent, expandedIds]);
+
+  const rootCount = useMemo(
+    () => draftTasks.filter((t) => !t.parent_task_id).length,
+    [draftTasks]
+  );
+
+  // ============ UI操作 ============
+
+  const toggleExpand = (id: ID) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const updateTaskTitle = (id: ID, title: string) => {
+    setDraftTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, title, updated_at: now() } : t))
+    );
+
+    if (submitTried) {
+      setTaskErrors((prev) => ({
+        ...prev,
+        [id]: title.trim() ? null : "入力してください",
+      }));
+    }
+  };
+
+  const updateProjectName = (name: string) => {
+    setDraftProject((prev) => ({ ...prev, name, updated_at: now() }));
+    if (submitTried) setProjectNameError(name.trim() ? null : "入力してください");
+  };
+
+  // 追加：指定行の直後に、同じ親として追加
   const addTaskAfter = (afterId: ID) => {
     setDraftTasks((prev) => {
       const idx = prev.findIndex((t) => t.id === afterId);
       if (idx < 0) return prev;
 
+      const after = prev[idx];
       const next = [...prev];
-      next.splice(idx + 1, 0, createDraftTask(draftProject.id));
+      next.splice(
+        idx + 1,
+        0,
+        createDraftTask(draftProject.id, "", after.parent_task_id ?? null)
+      );
       return normalizeOrderIndex(next);
     });
   };
 
-  /**
-   * 削除：削除後も normalize で 0..n-1 を維持
-   * ※最低1件は残す、などのルールが必要ならここで制御
-   */
+  // 削除：rootが2件未満にならない / 親を消したら子も消す
   const removeTask = (id: ID) => {
     setDraftTasks((prev) => {
-      const next = prev.filter((t) => t.id !== id);
-      return normalizeOrderIndex(next.length ? next : [createDraftTask(draftProject.id)]);
+      const target = prev.find((t) => t.id === id);
+      if (!target) return prev;
+
+      // 親を消すなら子も一緒に消す
+      const removed = prev.filter((t) => t.id !== id && t.parent_task_id !== id);
+
+      const nextRootCount = removed.filter((t) => !t.parent_task_id).length;
+      if (nextRootCount < 2) return prev;
+
+      // 展開状態からも消しとく（地味に大事）
+      setExpandedIds((old) => {
+        const n = new Set(old);
+        n.delete(id);
+        return n;
+      });
+
+      return normalizeOrderIndex(removed);
     });
   };
 
-  /** 更新：title を更新（DBカラム名に合わせる） */
-  const updateTaskTitle = (id: ID, title: string) => {
-    setDraftTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, title, updated_at: now() } : t))
-    );
-  };
+  // 保存可能か（root入力済み2件以上）
+  const canSave = useMemo(() => {
+    const projectName = draftProject.name.trim();
+    if (!projectName) return false;
 
-  /** プロジェクト名更新 */
-  const updateProjectName = (name: string) => {
-    setDraftProject((prev) => ({ ...prev, name, updated_at: now() }));
-  };
+    const filledRootCount = draftTasks
+      .filter((t) => !t.parent_task_id)
+      .filter((t) => t.title.trim().length > 0).length;
 
-  /**
-   * 保存（いまはUI優先で未実装）
-   * - 本来は draftProject と draftTasks を親へ渡して state に追加 → モーダル閉じる
-   * - もしくは API に POST して DBへ保存
-   */
+    return filledRootCount >= 2;
+  }, [draftProject.name, draftTasks]);
+
   const handleSave = () => {
-    onSave(draftProject, draftTasks);
+    setSubmitTried(true);
+
+    const pName = draftProject.name.trim();
+    setProjectNameError(pName ? null : "入力してください");
+
+    const nextTaskErrors: Record<ID, string | null> = {};
+    for (const t of draftTasks) {
+      nextTaskErrors[t.id] = t.title.trim() ? null : "入力してください";
+    }
+    setTaskErrors(nextTaskErrors);
+
+    // rootで2件以上
+    const filledRootTasks = draftTasks
+      .filter((t) => !t.parent_task_id)
+      .map((t) => ({ ...t, title: t.title.trim() }))
+      .filter((t) => t.title.length > 0);
+
+    if (!pName || filledRootTasks.length < 2) return;
+
+    const ts = now();
+
+    const projectToSave: Project = {
+      ...draftProject,
+      name: pName,
+      current_order_index: project ? project.current_order_index ?? 0 : 0,
+      updated_at: ts,
+    };
+
+    // 今は root だけ保存（子は次ステップ）
+    const tasksToSave: Task[] = normalizeOrderIndex(
+      filledRootTasks.map((t) => ({
+        ...t,
+        project_id: projectToSave.id,
+        parent_task_id: null,
+        updated_at: ts,
+      }))
+    );
+
+    onSave(projectToSave, tasksToSave);
     onClose();
   };
-
-  // 右側の表示用：timelineに出すのは draftTasks
-  const viewTasks = useMemo(() => draftTasks, [draftTasks]);
 
   if (!open) return null;
 
@@ -189,7 +341,7 @@ export default function ProjectModal({ open, onClose, onSave }: Props) {
         className={styles.modal}
         role="dialog"
         aria-modal="true"
-        aria-label="新規プロジェクト作成"
+        aria-label="プロジェクト作成/編集"
         onClick={(e) => e.stopPropagation()}
       >
         <div className={styles.modalInner}>
@@ -203,7 +355,12 @@ export default function ProjectModal({ open, onClose, onSave }: Props) {
               <button type="button" className={styles.iconBtn} aria-label="ピン">
                 📌
               </button>
-              <button type="button" className={styles.iconBtn} aria-label="閉じる" onClick={onClose}>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                aria-label="閉じる"
+                onClick={onClose}
+              >
                 ✕
               </button>
             </div>
@@ -215,8 +372,10 @@ export default function ProjectModal({ open, onClose, onSave }: Props) {
               className={styles.projectNameInput}
               value={draftProject.name}
               onChange={(e) => updateProjectName(e.target.value)}
+              placeholder="プロジェクト名"
             />
             <div className={styles.projectUnderline} />
+            {projectNameError && <div className={styles.fieldError}>{projectNameError}</div>}
           </div>
 
           {/* タイムライン */}
@@ -224,8 +383,32 @@ export default function ProjectModal({ open, onClose, onSave }: Props) {
             <div className={styles.dot} data-pos="start" aria-hidden />
 
             <div className={styles.list}>
-              {viewTasks.map((t) => (
-                <div key={t.id} className={styles.item}>
+              {viewRows.map(({ t, depth, hasChildren, isExpanded }) => (
+                <div
+                  key={t.id}
+                  className={styles.item}
+                  data-depth={String(depth)}
+                  data-parent={hasChildren ? "1" : "0"}
+                  data-expanded={isExpanded ? "1" : "0"}
+                >
+                  {/* 左：展開アイコン */}
+                  <div className={styles.itemLeft}>
+                    {hasChildren ? (
+                      <button
+                        type="button"
+                        className={styles.expandBtn}
+                        aria-label={isExpanded ? "折りたたむ" : "展開する"}
+                        onClick={() => toggleExpand(t.id)}
+                        data-open={isExpanded ? "1" : "0"}
+                      >
+                        <ChevronIcon />
+                      </button>
+                    ) : (
+                      <div className={styles.expandSpacer} />
+                    )}
+                  </div>
+
+                  {/* 中央：入力 */}
                   <div className={styles.taskCard}>
                     <input
                       className={styles.taskInput}
@@ -233,9 +416,12 @@ export default function ProjectModal({ open, onClose, onSave }: Props) {
                       onChange={(e) => updateTaskTitle(t.id, e.target.value)}
                       placeholder="タスク名"
                     />
+                    {taskErrors[t.id] && (
+                      <div className={styles.fieldError}>{taskErrors[t.id]}</div>
+                    )}
                   </div>
 
-                  {/* 右側： ⋮ ＋ － */}
+                  {/* 右：操作 */}
                   <div className={styles.itemRight}>
                     <button type="button" className={styles.moreBtn} aria-label="メニュー">
                       ⋮
@@ -255,6 +441,8 @@ export default function ProjectModal({ open, onClose, onSave }: Props) {
                       className={styles.removeBtn}
                       aria-label="削除"
                       onClick={() => removeTask(t.id)}
+                      disabled={!t.parent_task_id && rootCount <= 2}
+                      title={!t.parent_task_id && rootCount <= 2 ? "rootは最低2件必要です" : "削除"}
                     >
                       −
                     </button>
@@ -267,12 +455,27 @@ export default function ProjectModal({ open, onClose, onSave }: Props) {
           </div>
 
           <div className={styles.footer}>
-            <button type="button" className={styles.saveBtn} onClick={handleSave}>
+            <button type="button" className={styles.saveBtn} onClick={handleSave} disabled={!canSave}>
               保存
             </button>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className={styles.chev} aria-hidden="true">
+      <path
+        d="M4 8 L12 16 L20 8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
