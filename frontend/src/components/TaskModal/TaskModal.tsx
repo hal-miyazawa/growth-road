@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./TaskModal.module.scss";
 import type { ID, Task, Label } from "../../types/models";
 
@@ -36,6 +36,9 @@ export default function TaskModal({
   const [mounted, setMounted] = useState(open);
   const [phase, setPhase] = useState<Phase>("open");
 
+  const [labelOpen, setLabelOpen] = useState(false);
+  const labelWrapRef = useRef<HTMLDivElement | null>(null);
+
   // 入力
   const [title, setTitle] = useState("タスク");
   const [memo, setMemo] = useState("");
@@ -55,6 +58,20 @@ export default function TaskModal({
       setSelectedLabelId(null);
     }
   }, [open, task]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!labelOpen) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const el = labelWrapRef.current;
+      if (!el) return;
+      if (!el.contains(e.target as Node)) setLabelOpen(false);
+    };
+
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open, labelOpen]);
 
   // 表示/非表示 + アニメ制御
   useEffect(() => {
@@ -85,6 +102,8 @@ export default function TaskModal({
   }, [mounted, onClose]);
 
   if (!mounted) return null;
+
+  
 
   // 保存
   const handleSave = () => {
@@ -139,21 +158,64 @@ export default function TaskModal({
       >
         {/* 上部 */}
         <div className={styles.topRow}>
-          <select
-            className={styles.labelSelect}
-            value={selectedLabelId ?? ""}
-            onChange={(e) =>
-              setSelectedLabelId((e.target.value || null) as ID | null)
-            }
-          >
-            <option value="">ラベル：なし</option>
-            {labels.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
+          {/* ラベル選択（ProjectModalと同じUI） */}
+          <div className={styles.labelWrap} ref={labelWrapRef}>
+            <button
+              type="button"
+              className={styles.labelBtn}
+              onClick={() => setLabelOpen((v) => !v)}
+            >
+              {(() => {
+                const current = labels.find((l) => l.id === selectedLabelId);
 
+                return (
+                  <>
+                    <span
+                      className={styles.labelDot}
+                      style={{ background: current?.color ?? "#BDBDBD" }}
+                    />
+                    <span className={styles.labelBtnText}>
+                      {current ? current.name : "ラベルなし"}
+                    </span>
+                  </>
+                );
+              })()}
+              <span className={styles.caret}>▼</span>
+            </button>
+
+            {labelOpen && (
+              <div className={styles.labelMenu}>
+                {labels.map((l) => (
+                  <button
+                    key={l.id}
+                    type="button"
+                    className={styles.labelItem}
+                    onClick={() => {
+                      setSelectedLabelId(l.id);
+                      setLabelOpen(false);
+                    }}
+                  >
+                    <span
+                      className={styles.labelDot}
+                      style={{ background: l.color ?? "#BDBDBD" }}
+                    />
+                    {l.name}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  className={styles.labelItem}
+                  onClick={() => {
+                    setSelectedLabelId(null);
+                    setLabelOpen(false);
+                  }}
+                >
+                  （ラベルなし）
+                </button>
+              </div>
+            )}
+          </div>
           <div className={styles.topRight}>
             {/* ピンはまだ未実装ならこのままでOK */}
             <button type="button" className={styles.iconBtn} aria-label="ピン">
