@@ -107,11 +107,28 @@ function findLabel(labels: Label[], labelId?: ID | null) {
   return labels.find((l) => l.id === labelId) ?? null;
 }
 
+function upsertTasksById(prev: Task[], incoming: Task[]) {
+  const byId = new Map<string, Task>();
+
+  // 先に prev を入れる
+  for (const t of prev) byId.set(t.id, t);
+
+  // incoming を上書き（同じidなら置き換え）
+  for (const t of incoming) byId.set(t.id, t);
+
+  // Map -> 配列
+  return Array.from(byId.values());
+}
+
 export default function Dashboard() {
   const [taskOpen, setTaskOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<ID | null>(null);
   const [selectedLabelId, setSelectedLabelId] = useState<ID | null>(null);
+  const [convertSoloTaskId, setConvertSoloTaskId] = useState<ID | null>(null);
+  const [convertSoloTaskTitle, setConvertSoloTaskTitle] = useState("");
+  const [convertSoloTaskMemo, setConvertSoloTaskMemo] = useState<string | null>(null);
+  const [convertSoloLabelId, setConvertSoloLabelId] = useState<string | null>(null);
   
   
   
@@ -153,6 +170,16 @@ export default function Dashboard() {
     };
 
     setLabels((prev) => [...prev, newLabel]);
+  };
+  
+
+  // ＋押したときのハンドラ
+  const openProjectFromSoloTask = (t: Task) => {
+    setConvertSoloTaskId(t.id);
+    setConvertSoloTaskTitle(t.title ?? "");
+    setConvertSoloTaskMemo(t.memo ?? null);
+    setProjectOpen(true);
+    setConvertSoloLabelId(t.label_id ?? null);
   };
 
   // 「次の未完了」まで index を進める（完了済みが混ざっても詰まらない）
@@ -293,28 +320,36 @@ const projectCards = projects
       <div className={styles.page}>
         <div className={styles.grid}>
           {filteredCards.map((c) => (
-          <ProjectCard
-            key={c.id}
-            title={c.title}
-            projectName={c.kind === "solo" ? "" : c.projectName}
-            topHoverText={c.kind === "solo" ? "＋" : undefined}
-            color={c.color}
-            pinned={c.pinned}
-            onTogglePin={() => c.taskId && togglePin(c.taskId)}
-            onComplete={() => completeTask(c)}
-            onClick={() => {
-              setEditingTaskId(c.taskId);
-              setTaskOpen(true);
-            }}
-            onClickProjectName={
-              c.kind === "project"
-                ? () => {
-                    setEditingProjectId(c.projectId);
-                    setProjectOpen(true);
-                  }
-                : undefined
-            }
-          />
+            <ProjectCard
+              key={c.id}
+              title={c.title}
+              projectName={c.kind === "solo" ? "" : c.projectName}
+              color={c.color}
+              pinned={c.pinned}
+              onTogglePin={() => c.taskId && togglePin(c.taskId)}
+              onComplete={() => completeTask(c)}
+
+              // ✅ solo のときだけ「＋」を有効化
+              onConvertToProject={
+                c.kind === "solo"
+                  ? () => openProjectFromSoloTask(
+                      tasks.find((t) => t.id === c.taskId)! // これが一番確実
+                    )
+                  : undefined
+              }
+              onClick={() => {
+                setEditingTaskId(c.taskId);
+                setTaskOpen(true);
+              }}
+              onClickProjectName={
+                c.kind === "project"
+                  ? () => {
+                      setEditingProjectId(c.projectId);
+                      setProjectOpen(true);
+                    }
+                  : undefined
+              }
+            />
           ))}
         </div>
       </div>
@@ -398,10 +433,19 @@ const projectCards = projects
         onClose={() => {
           setProjectOpen(false);
           setEditingProjectId(null);
+          setConvertSoloTaskId(null);
+          setConvertSoloTaskTitle("");
+          setConvertSoloTaskMemo(null);
+          setConvertSoloLabelId(null);
         }}
         labels={labels}
         project={editingProject}
         tasks={editingProjectTasks}
+          // ★追加：solo→project化の引き継ぎ
+        convertTaskId={convertSoloTaskId}
+        convertTaskTitle={convertSoloTaskTitle}
+        convertTaskMemo={convertSoloTaskMemo}
+        convertLabelId={convertSoloLabelId}
         onSave={(project, newTasks) => {
           // 保存前の「現在の表示タスクID」を拾う
           const prevProject = projects.find((p) => p.id === project.id) ?? null;
@@ -409,11 +453,9 @@ const projectCards = projects
           const prevFlat = flatIdsByProject.get(project.id) ?? [];
           const prevCurrentTaskId = prevFlat[prevIndex] ?? null;
 
-          setTasks((prev) => {
-            const kept = prev.filter((t) => t.project_id !== project.id);
-            return [...kept, ...newTasks];
-          });
-
+          // ★ここを置換：IDでupsert（= solo→project化の“差し替え”が起きる）
+          setTasks((prev) => upsertTasksById(prev, newTasks));
+          
           setProjects((prev) => {
             const exists = prev.some((p) => p.id === project.id);
 
@@ -439,6 +481,10 @@ const projectCards = projects
 
           setProjectOpen(false);
           setEditingProjectId(null);
+          setConvertSoloTaskId(null);
+          setConvertSoloTaskTitle("");
+          setConvertSoloTaskMemo(null);
+          setConvertSoloLabelId(null);
         }}
         
         onDelete={(projectId) => {
@@ -451,8 +497,11 @@ const projectCards = projects
           // ③ モーダル閉じる（確認後に呼ばれるけど安全に）
           setProjectOpen(false);
           setEditingProjectId(null);
+          setConvertSoloTaskId(null);
+          setConvertSoloTaskTitle("");
+          setConvertSoloTaskMemo(null);
+          setConvertSoloLabelId(null);
         }}
-
       />
     </AppLayout>
   );

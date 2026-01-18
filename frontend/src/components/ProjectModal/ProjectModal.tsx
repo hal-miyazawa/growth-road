@@ -14,6 +14,12 @@ type Props = {
   tasks?: Task[] | null;
     // ★追加：プロジェクト削除
   onDelete?: (projectId: ID) => void;
+
+  // ★追加：soloタスク → プロジェクト化
+  convertTaskId?: ID | null;
+  convertTaskTitle?: string;
+  convertTaskMemo?: string | null;
+  convertLabelId?: ID | null;
 };
 
 const uid = () => crypto.randomUUID?.() ?? String(Date.now() + Math.random());
@@ -69,6 +75,10 @@ export default function ProjectModal({
   tasks,
   labels,
   onDelete,
+  convertTaskId,
+  convertTaskTitle,
+  convertTaskMemo,
+  convertLabelId,
 }: Props) {
   const [projectNameError, setProjectNameError] = useState<string | null>(null);
   const [taskErrors, setTaskErrors] = useState<Record<ID, string | null>>({});
@@ -142,16 +152,32 @@ export default function ProjectModal({
     setDraftProject({
       id: newProjectId,
       name: "",
-      label_id: null,
+      label_id: convertLabelId ?? null, // ★ここ
       current_order_index: 0,
       created_at: ts,
       updated_at: ts,
     });
 
-    setDraftTasks(
-      normalizeOrderIndex([createDraftTask(newProjectId), createDraftTask(newProjectId),createDraftTask(newProjectId)])
-    );
-  }, [open, project, tasks]);
+    const base = [
+      createDraftTask(newProjectId),
+      createDraftTask(newProjectId),
+      createDraftTask(newProjectId),
+    ];
+
+    // convert ありなら「1個目」に差し込む
+    if (convertTaskId) {
+      base[0] = {
+        ...base[0],
+        id: convertTaskId,                 // ★ID引き継ぎ（これがキモ）
+        title: convertTaskTitle ?? "",
+        memo: convertTaskMemo ?? null,
+        updated_at: ts,
+      };
+    }
+
+setDraftTasks(normalizeOrderIndex(base));
+
+  }, [open, project, tasks, convertTaskId, convertTaskTitle, convertTaskMemo]);
 
   // Escで閉じる
   useEffect(() => {

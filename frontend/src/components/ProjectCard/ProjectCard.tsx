@@ -11,12 +11,13 @@ type Props = {
   onTogglePin?: () => void;
   onComplete?: () => void;
 
-  // 上の色部分ホバーで出す文字（solo用）
-  topHoverText?: string;
-
   // ★追加：プロジェクト名クリック（編集用）
   onClickProjectName?: () => void;
-  
+
+    // ★追加：project無しカードの「＋」用
+  onClickPlus?: () => void;
+  isSolo?: boolean; // projectNameが空のとき true を渡す
+  onConvertToProject?: () => void;
 };
 
 export default function ProjectCard({
@@ -27,8 +28,8 @@ export default function ProjectCard({
   onClick,
   onTogglePin,
   onComplete,
-  topHoverText,
   onClickProjectName, // ★追加
+  onConvertToProject,
 }: Props) {
   const handleKeyDown: KeyboardEventHandler<HTMLDivElement> = (e) => {
     if (!onClick) return;
@@ -46,40 +47,47 @@ export default function ProjectCard({
       onClick={onClick}
       onKeyDown={handleKeyDown}
     >
-      <div
-        className={styles.top}
-        style={{ backgroundColor: color }}
-        data-hover={topHoverText ? "1" : "0"}
-      >
-        {/* project の時だけ表示（soloなら空文字を出さない） */}
-        {projectName && (
-          <button
-            type="button"
-            className={styles.topLeft}
-            onClick={(e) => {
-              e.stopPropagation(); // ★カードクリック（TaskModal）を止める
-              onClickProjectName?.();
-            }}
-          >
-            {projectName}
-          </button>
-        )}
-
-        {topHoverText && <div className={styles.topHoverText}>{topHoverText}</div>}
-
+    <div className={styles.top} style={{ backgroundColor: color }}>
+      {/* 左上：projectNameがある→編集、ない→＋ */}
+      {projectName ? (
         <button
           type="button"
-          className={styles.pinBtn}
-          aria-label="ピン"
+          className={styles.topLeft}
           onClick={(e) => {
             e.stopPropagation();
-            onTogglePin?.();
+            onClickProjectName?.();
           }}
-          data-active={pinned ? "1" : "0"}
         >
-          <PinIcon />
+          {projectName}
         </button>
-      </div>
+      ) : (
+        <button
+          type="button"
+          className={styles.topLeft}
+          data-variant="plus"
+          aria-label="プロジェクト化"
+          onClick={(e) => {
+            e.stopPropagation();
+            onConvertToProject?.();
+          }}
+        >
+          ＋
+        </button>
+      )}
+
+      <button
+        type="button"
+        className={styles.pinBtn}
+        aria-label="ピン"
+        onClick={(e) => {
+          e.stopPropagation();
+          onTogglePin?.();
+        }}
+        data-active={pinned ? "1" : "0"}
+      >
+        <PinIcon />
+      </button>
+    </div>
 
       <div className={styles.title}>{title}</div>
 

@@ -32,7 +32,6 @@
 .top {
   height: 45px;
   position: relative;
-  transition: filter 140ms ease;
 }
 
 /* 中央タイトル */
@@ -45,7 +44,6 @@
   font-size: 34px;
   font-weight: 400;
   color: rgba(0, 0, 0, 0.77);
-
   white-space: nowrap;
 }
 
@@ -63,60 +61,40 @@
   opacity: 1;
 }
 
-/* 左上：プロジェクト名（色バー上） */
+/* 左上：プロジェクト名 or ＋（色バー上） */
 .topLeft {
   position: absolute;
-  top: 10px;
+  top: 12px;
   left: 10px;
+
+  /* button化してる前提 */
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+
+  cursor: pointer;
 
   font-size: 18px;
   font-weight: 700;
   color: rgba(0, 0, 0, 0.35);
   white-space: nowrap;
 
-  cursor: pointer;
-
   transform-origin: left top;
   transition: opacity 120ms ease, color 120ms ease, transform 120ms ease;
-}
 
-/* project用：文字ホバーで濃く＆少し拡大 */
-.card:hover .topLeft:hover {
-  color: rgba(0, 0, 0, 0.55);
-  transform: scale(1.06);
-}
+  &:hover {
+    color: rgba(0, 0, 0, 0.55);
+    transform: scale(1.10);
+  }
 
-/* solo用：上の色バーをホバーした時だけ出る文字（見た目は.topLeftと同じ） */
-.topHoverText {
-  position: absolute;
-  top: 2px;
-  left: 8px;
-
-  font-size: 30px;
-  font-weight: 700;
-  color: rgba(0, 0, 0, 0.35);
-  white-space: nowrap;
-
-  opacity: 0;
-
-  /* ★重要：hover/clickできるように */
-  pointer-events: auto;
-  cursor: pointer;
-  z-index: 2;
-
-  transform-origin: left top;
-  transition: opacity 120ms ease, color 120ms ease, transform 120ms ease;
-}
-
-/* data-hover="1" があるカードだけ、topホバーで表示 */
-.top[data-hover="1"]:hover .topHoverText {
-  opacity: 1;
-}
-
-/* solo用：文字ホバーで濃く＆少し拡大 */
-.top[data-hover="1"]:hover .topHoverText:hover {
-  color: rgba(0, 0, 0, 0.55);
-  transform: scale(1.06);
+  /* ＋のときだけ文字サイズを上げる */
+  &[data-variant="plus"] {
+    top: 10px;
+    font-size: 25px;
+    line-height: 1;
+  }
 }
 
 /* 右上：ピン（色バー上） */
@@ -137,10 +115,15 @@
 
   transform-origin: center;
   transition: opacity 120ms ease, transform 120ms ease;
+
+  &:hover {
+    transform: scale(1.12);
+  }
 }
 
-.card:hover .pinBtn:hover {
-  transform: scale(1.12);
+/* pinned=true の時だけ少し濃く（任意） */
+.pinBtn[data-active="1"] .icon {
+  color: #000;
 }
 
 /* 右下：チェックボタン（カードhoverで○が出る → ○hoverで✓が出る） */
@@ -161,26 +144,17 @@
   place-items: center;
   cursor: pointer;
 
-  opacity: 0;
-
   transform-origin: center;
   transition: transform 140ms ease, background 140ms ease, opacity 120ms ease;
-}
 
-.card:hover .bottomRightBtn {
-  opacity: 1;
-}
+  &:hover {
+    transform: scale(1.08);
+    background: rgba(255, 255, 255, 0.7);
+  }
 
-.card:hover .bottomRightBtn:hover {
-  transform: scale(1.08);
-}
-
-.bottomRightBtn:hover {
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.bottomRightBtn:active {
-  transform: scale(0.96);
+  &:active {
+    transform: scale(0.96);
+  }
 }
 
 /* ✓ は最初は消しておく */
@@ -205,20 +179,4 @@
   width: 100%;
   height: 100%;
   color: #111;
-}
-
-/* pinned=true の時だけ少し濃く（任意） */
-.pinBtn[data-active="1"] .icon {
-  color: #000;
-}
-
-
-.topLeft {
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  text-align: left;
 }
