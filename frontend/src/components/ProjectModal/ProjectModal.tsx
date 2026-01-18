@@ -1,14 +1,19 @@
 import styles from "./ProjectModal.module.scss";
-import { useEffect, useMemo, useState } from "react";
-import type { ID, Project, Task } from "../../types/models";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ID, Project, Task, Label } from "../../types/models";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   onSave: (project: Project, tasks: Task[]) => void;
 
+  // ★これを追加
+  labels: Label[];
+
   project?: Project | null;
   tasks?: Task[] | null;
+    // ★追加：プロジェクト削除
+  onDelete?: (projectId: ID) => void;
 };
 
 const uid = () => crypto.randomUUID?.() ?? String(Date.now() + Math.random());
@@ -62,10 +67,24 @@ export default function ProjectModal({
   onSave,
   project,
   tasks,
+  labels,
+  onDelete,
 }: Props) {
   const [projectNameError, setProjectNameError] = useState<string | null>(null);
   const [taskErrors, setTaskErrors] = useState<Record<ID, string | null>>({});
   const [submitTried, setSubmitTried] = useState(false);
+  const [labelOpen, setLabelOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailTaskId, setDetailTaskId] = useState<ID | null>(null);
+  const labelWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // 詳細モーダル内の入力（編集中だけ使う）
+  const [detailTitle, setDetailTitle] = useState("");
+  const [detailMemo, setDetailMemo] = useState<string>("");
+
+  const isEdit = !!project;               // 既に編集モード判定に使える
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
 
   // 展開状態
   const [expandedIds, setExpandedIds] = useState<Set<ID>>(new Set());
@@ -84,7 +103,7 @@ export default function ProjectModal({
 
   const [draftTasks, setDraftTasks] = useState<Task[]>(() => {
     const projectId = uid();
-    return normalizeOrderIndex([createDraftTask(projectId), createDraftTask(projectId)]);
+    return normalizeOrderIndex([createDraftTask(projectId), createDraftTask(projectId),createDraftTask(projectId)]);
   });
 
   // open時に新規/編集で初期化
@@ -106,17 +125,13 @@ export default function ProjectModal({
         .map((t) => ({ ...t }))
         .sort((a, b) => a.order_index - b.order_index);
 
-      // root（parent_task_id=null）が2件未満なら追加して2件に
+      // root（parent_task_id=null）が1件未満なら追加して1件に
       const rootCount = base.filter((t) => !t.parent_task_id).length;
+
       const ensured =
-        rootCount >= 2
+        rootCount > 0
           ? base
-          : [
-              ...base,
-              ...Array.from({ length: 2 - rootCount }, () =>
-                createDraftTask(project.id, "", null)
-              ),
-            ];
+          : [...base, createDraftTask(project.id, "", null)];
 
       setDraftTasks(normalizeOrderIndex(ensured));
       return;
@@ -134,7 +149,7 @@ export default function ProjectModal({
     });
 
     setDraftTasks(
-      normalizeOrderIndex([createDraftTask(newProjectId), createDraftTask(newProjectId)])
+      normalizeOrderIndex([createDraftTask(newProjectId), createDraftTask(newProjectId),createDraftTask(newProjectId)])
     );
   }, [open, project, tasks]);
 
@@ -147,6 +162,21 @@ export default function ProjectModal({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
+
+  // ラベルメニュー：外クリックで閉じる
+  useEffect(() => {
+    if (!open) return;
+    if (!labelOpen) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const el = labelWrapRef.current;
+      if (!el) return;
+      if (!el.contains(e.target as Node)) setLabelOpen(false);
+    };
+
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open, labelOpen]);
 
   // 親ID -> 子の配列（表示/展開用）
   const childrenByParent = useMemo(() => {
@@ -211,6 +241,22 @@ export default function ProjectModal({
 
   // ============ UI操作 ============
 
+  const openDetail = (id: ID) => {
+    const target = draftTasks.find((x) => x.id === id);
+    if (!target) return;
+
+    setDetailTaskId(id);
+    setDetailTitle(target.title ?? "");
+    setDetailMemo(target.memo ?? "");
+    setDetailOpen(true);
+  };
+
+  const closeDetail = () => {
+    setDetailOpen(false);
+    setDetailTaskId(null);
+  };
+
+
   const toggleExpand = (id: ID) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -225,12 +271,15 @@ export default function ProjectModal({
       prev.map((t) => (t.id === id ? { ...t, title, updated_at: now() } : t))
     );
 
-    if (submitTried) {
-      setTaskErrors((prev) => ({
-        ...prev,
-        [id]: title.trim() ? null : "入力してください",
-      }));
-    }
+    if (!submitTried) return;
+
+    const target = draftTasks.find((x) => x.id === id);
+    if (target?.parent_task_id) return; // rootだけ
+
+    setTaskErrors((prev) => ({
+      ...prev,
+      [id]: title.trim() ? null : "入力してください",
+    }));
   };
 
   const updateProjectName = (name: string) => {
@@ -255,7 +304,7 @@ export default function ProjectModal({
     });
   };
 
-  // 削除：rootが2件未満にならない / 親を消したら子も消す
+  // 削除：rootが1件未満にならない / 親を消したら子も消す
   const removeTask = (id: ID) => {
     setDraftTasks((prev) => {
       const target = prev.find((t) => t.id === id);
@@ -265,7 +314,7 @@ export default function ProjectModal({
       const removed = prev.filter((t) => t.id !== id && t.parent_task_id !== id);
 
       const nextRootCount = removed.filter((t) => !t.parent_task_id).length;
-      if (nextRootCount < 2) return prev;
+      if (nextRootCount < 1) return prev;
 
       // 展開状態からも消しとく（地味に大事）
       setExpandedIds((old) => {
@@ -278,7 +327,7 @@ export default function ProjectModal({
     });
   };
 
-  // 保存可能か（root入力済み2件以上）
+  // 保存可能か（root入力済み1件以上）
   const canSave = useMemo(() => {
     const projectName = draftProject.name.trim();
     if (!projectName) return false;
@@ -287,7 +336,7 @@ export default function ProjectModal({
       .filter((t) => !t.parent_task_id)
       .filter((t) => t.title.trim().length > 0).length;
 
-    return filledRootCount >= 2;
+    return filledRootCount >= 1;
   }, [draftProject.name, draftTasks]);
 
   const handleSave = () => {
@@ -296,19 +345,20 @@ export default function ProjectModal({
     const pName = draftProject.name.trim();
     setProjectNameError(pName ? null : "入力してください");
 
+    // ★ rootだけエラー判定（保存条件と一致させる）
     const nextTaskErrors: Record<ID, string | null> = {};
     for (const t of draftTasks) {
+      if (t.parent_task_id) continue; // rootだけ
       nextTaskErrors[t.id] = t.title.trim() ? null : "入力してください";
     }
     setTaskErrors(nextTaskErrors);
 
-    // rootで2件以上
     const filledRootTasks = draftTasks
       .filter((t) => !t.parent_task_id)
       .map((t) => ({ ...t, title: t.title.trim() }))
       .filter((t) => t.title.length > 0);
 
-    if (!pName || filledRootTasks.length < 2) return;
+    if (!pName || filledRootTasks.length < 1) return;
 
     const ts = now();
 
@@ -320,11 +370,14 @@ export default function ProjectModal({
     };
 
     // 今は root だけ保存（子は次ステップ）
+    const labelId = projectToSave.label_id ?? null;
+
     const tasksToSave: Task[] = normalizeOrderIndex(
       filledRootTasks.map((t) => ({
         ...t,
         project_id: projectToSave.id,
         parent_task_id: null,
+        label_id: labelId, 
         updated_at: ts,
       }))
     );
@@ -347,9 +400,59 @@ export default function ProjectModal({
         <div className={styles.modalInner}>
           {/* 上段 */}
           <div className={styles.topRow}>
-            <button type="button" className={styles.labelBtn}>
-              ラベル<span className={styles.caret}>▼</span>
-            </button>
+            {/* ラベル選択 */}
+            <div className={styles.labelWrap} ref={labelWrapRef}>
+              <button
+                type="button"
+                className={styles.labelBtn}
+                onClick={() => setLabelOpen((v) => !v)}
+              >
+                {(() => {
+                  const current = labels.find((l) => l.id === draftProject.label_id);
+                  return current ? current.name : "ラベル";
+                })()}
+                <span className={styles.caret}>▼</span>
+              </button>
+
+              {labelOpen && (
+                <div className={styles.labelMenu}>
+                  {labels.map((l) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      className={styles.labelItem}
+                      onClick={() => {
+                        setDraftProject((prev) => ({
+                          ...prev,
+                          label_id: l.id,
+                          updated_at: now(),
+                        }));
+                        setLabelOpen(false);
+                      }}
+                    >
+                      <span
+                        className={styles.labelDot}
+                        style={{ background: l.color ?? "#BDBDBD" }}
+                      />
+                      {l.name}
+                    </button>
+                  ))}
+
+                  {/* 解除（最小構成ならこれも便利） */}
+                  <button
+                    type="button"
+                    className={styles.labelItem}
+                    onClick={() => {
+                      setDraftProject((prev) => ({ ...prev, label_id: null, updated_at: now() }));
+                      setLabelOpen(false);
+                    }}
+                  >
+                    （ラベルなし）
+                  </button>
+                </div>
+              )}
+            </div>
+
 
             <div className={styles.topRight}>
               <button type="button" className={styles.iconBtn} aria-label="ピン">
@@ -368,14 +471,14 @@ export default function ProjectModal({
 
           {/* プロジェクト名 */}
           <div className={styles.projectNameRow}>
-            <input
-              className={styles.projectNameInput}
-              value={draftProject.name}
-              onChange={(e) => updateProjectName(e.target.value)}
-              placeholder="プロジェクト名"
-            />
+              <input
+                className={styles.projectNameInput}
+                value={draftProject.name}
+                onChange={(e) => updateProjectName(e.target.value)}
+                placeholder={projectNameError ? "入力してください" : "プロジェクト名"}
+                data-error={projectNameError ? "1" : "0"}
+              />
             <div className={styles.projectUnderline} />
-            {projectNameError && <div className={styles.fieldError}>{projectNameError}</div>}
           </div>
 
           {/* タイムライン */}
@@ -409,21 +512,24 @@ export default function ProjectModal({
                   </div>
 
                   {/* 中央：入力 */}
-                  <div className={styles.taskCard}>
+                  <div className={styles.taskCard} data-error={taskErrors[t.id] ? "1" : "0"}>
                     <input
                       className={styles.taskInput}
                       value={t.title}
                       onChange={(e) => updateTaskTitle(t.id, e.target.value)}
-                      placeholder="タスク名"
+                      placeholder={taskErrors[t.id] ? "入力してください" : "タスク名"}
+                      data-error={taskErrors[t.id] ? "1" : "0"}
                     />
-                    {taskErrors[t.id] && (
-                      <div className={styles.fieldError}>{taskErrors[t.id]}</div>
-                    )}
                   </div>
 
                   {/* 右：操作 */}
                   <div className={styles.itemRight}>
-                    <button type="button" className={styles.moreBtn} aria-label="メニュー">
+                    <button
+                      type="button"
+                      className={styles.moreBtn}
+                      aria-label="タスク詳細を編集"
+                      onClick={() => openDetail(t.id)}
+                    >
                       ⋮
                     </button>
 
@@ -441,8 +547,8 @@ export default function ProjectModal({
                       className={styles.removeBtn}
                       aria-label="削除"
                       onClick={() => removeTask(t.id)}
-                      disabled={!t.parent_task_id && rootCount <= 2}
-                      title={!t.parent_task_id && rootCount <= 2 ? "rootは最低2件必要です" : "削除"}
+                      disabled={!t.parent_task_id && rootCount <= 1}
+                      title={!t.parent_task_id && rootCount <= 1 ? "rootは最低1件必要です" : "削除"}
                     >
                       −
                     </button>
@@ -453,13 +559,173 @@ export default function ProjectModal({
 
             <div className={styles.dot} data-pos="end" aria-hidden />
           </div>
-
           <div className={styles.footer}>
-            <button type="button" className={styles.saveBtn} onClick={handleSave} disabled={!canSave}>
+
+            {/* 左下：削除（編集モードだけ） */}
+          {isEdit && onDelete && (
+            <button
+              type="button"
+              className={styles.deleteProjectBtn}
+              onClick={() => setConfirmOpen(true)}
+            >
+              削除
+            </button>
+          )}
+
+            <button
+              type="button"
+              className={styles.saveBtn}
+              onClick={handleSave}
+              data-disabled={!canSave ? "1" : "0"} // 見た目用
+            >
               保存
             </button>
           </div>
         </div>
+        {detailOpen && detailTaskId && (
+          <div
+            className={styles.detailBackdrop}
+            role="presentation"
+            onClick={closeDetail}
+          >
+            <div
+              className={styles.detailModal}
+              role="dialog"
+              aria-modal="true"
+              aria-label="タスク編集"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 上部（×だけ） */}
+              <div className={styles.detailTopRow}>
+                <button
+                  type="button"
+                  className={styles.detailIconBtn}
+                  aria-label="閉じる"
+                  onClick={closeDetail}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* タイトル */}
+              <div className={styles.detailTitleWrap}>
+                <input
+                  className={styles.detailTitleInput}
+                  value={detailTitle}
+                  onChange={(e) => setDetailTitle(e.target.value)}
+                  placeholder="タスク名"
+                />
+              </div>
+
+              {/* メモ */}
+              <div className={styles.detailMemoWrap}>
+                <div className={styles.detailMemoLabel}>メモ</div>
+                <textarea
+                  className={styles.detailMemoArea}
+                  value={detailMemo}
+                  onChange={(e) => setDetailMemo(e.target.value)}
+                  placeholder="メモ"
+                />
+              </div>
+
+              {/* 操作（保存だけ） */}
+              <div className={styles.detailActions}>
+                <button
+                  type="button"
+                  className={styles.detailDeleteBtn}
+                  onClick={() => {
+                    if (!detailTaskId) return;
+                    const id = detailTaskId; // 退避（重要）
+                    closeDetail();           // 先に閉じてもOK
+                    removeTask(id);          // 「－」と同じ処理を呼ぶ
+                  }}
+                >
+                  削除
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.detailSaveBtn}
+                  onClick={() => {
+                    // 保存 → draftTasks に反映（今のままでOK）
+                    setDraftTasks((prev) =>
+                      prev.map((t) =>
+                        t.id === detailTaskId
+                          ? {
+                              ...t,
+                              title: detailTitle,
+                              memo: detailMemo.length ? detailMemo : null,
+                              updated_at: now(),
+                            }
+                          : t
+                      )
+                    );
+
+                    if (submitTried && detailTaskId) {
+                      const target = draftTasks.find((x) => x.id === detailTaskId);
+                      const isRoot = !target?.parent_task_id;
+                      if (isRoot) {
+                        setTaskErrors((prev) => ({
+                          ...prev,
+                          [detailTaskId]: detailTitle.trim() ? null : "入力してください",
+                        }));
+                      }
+                    }
+
+                    closeDetail();
+                  }}
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {confirmOpen && (
+        <div
+          className={styles.confirmBackdrop}
+          role="presentation"
+          onClick={() => setConfirmOpen(false)}
+        >
+          <div
+            className={styles.confirmModal}
+            role="dialog"
+            aria-modal="true"
+            aria-label="削除確認"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.confirmTitle}>本当に削除しますか？</div>
+            <div className={styles.confirmText}>
+              このプロジェクトと、プロジェクト内のタスクをすべて削除します。
+            </div>
+
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                className={styles.confirmCancel}
+                onClick={() => setConfirmOpen(false)}
+              >
+                キャンセル
+              </button>
+
+              <button
+                type="button"
+                className={styles.confirmDelete}
+                onClick={() => {
+                  if (!project) return;
+                  onDelete?.(project.id);
+                  setConfirmOpen(false);
+                  onClose(); // ProjectModal自体も閉じる
+                }}
+              >
+                削除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       </div>
     </div>
   );

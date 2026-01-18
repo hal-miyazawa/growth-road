@@ -43,8 +43,7 @@ $padTop: 16px;
 /* 白いモーダル本体 */
 .modal {
   width: min(800px, 92vw);
-  max-height: min(760px, 86vh);
-
+  height: min(720px, 86vh);
   background: #fff;
   border-radius: 14px;
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
@@ -56,7 +55,7 @@ $padTop: 16px;
 .modalInner {
   max-height: min(760px, 86vh);
   overflow: auto;
-
+  scrollbar-gutter: stable; // ★これを追加（ズレ防止）
   padding: 26px 28px 22px;
 
   /* スクロールバー含めて角丸に沿わせる */
@@ -185,6 +184,7 @@ $padTop: 16px;
 
     position: relative; /* ::before(縦線) の基準 */
     margin-top: 22px;
+    margin-bottom: 20px;
 
     display: flex;
     flex-direction: column;
@@ -284,6 +284,17 @@ $padTop: 16px;
   z-index: 1; /* 線より上 */
 }
 
+.fieldErrorTop {
+  position: absolute;
+  top: -26px;         // 位置は好みで調整
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 18px;
+  color: #e53935;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* ✅ 右のボタンはカードの右に「別配置」 */
 .itemRight {
   position: absolute;
@@ -376,38 +387,76 @@ $padTop: 16px;
 /* =========================
    Footer（保存ボタン）
 ========================= */
+/* =========================
+   Footer（左下：削除 / 右下：保存）
+========================= */
 
 .footer {
-  margin-top: 18px;
-  display: flex;
-  justify-content: flex-end;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 25px;
+  z-index: 10;
+
+  /* 背景のクリック/スクロールを邪魔しない */
+  pointer-events: none;
 }
 
-/* 保存ボタン */
+/* 右下：保存 */
 .saveBtn {
+  position: absolute;
+  right: 50px;
+  bottom: 0;
+  pointer-events: auto;
+
   border: none;
   cursor: pointer;
-
   background: #444;
   color: #fff;
 
   font-size: 22px;
   padding: 10px 22px;
   border-radius: 10px;
-
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 
-  &:hover {
-    filter: brightness(0.95);
-  }
-  &:active {
-    transform: translateY(1px);
-  }
+  &:hover { filter: brightness(0.95); }
+  &:active { transform: translateY(1px); }
   &:focus-visible {
     outline: 2px solid rgba(0, 0, 0, 0.35);
     outline-offset: 2px;
   }
 }
+
+.saveBtn[data-disabled="1"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* 左下：削除 */
+.deleteProjectBtn {
+  position: absolute;
+  left: 50px;
+  bottom: 0;
+  pointer-events: auto;
+
+  border: none;
+  cursor: pointer;
+  background: #a96a6a;
+  color: #fff;
+
+  font-size: 22px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+
+  &:hover { filter: brightness(0.95); }
+  &:active { transform: translateY(1px); }
+  &:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 2px;
+  }
+}
+
 
 .fieldError {
   margin-top: 6px;
@@ -452,4 +501,319 @@ $padTop: 16px;
 /* 子がいる親 かつ 展開中 のときだけ */
 .item[data-parent="1"][data-expanded="1"] .taskCard {
   background: #e6e6e6; /* 好みで調整 */
+}
+
+.labelWrap {
+  position: relative;
+}
+
+.labelMenu {
+  position: absolute;
+  top: 46px;
+  left: 0;
+  min-width: 200px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.18);
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgba(0,0,0,0.18);
+  padding: 8px;
+  z-index: 50;
+}
+
+.labelItem {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 10px 10px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+
+  &:hover {
+    background: #eee; /* 透過なしグレー */
+  }
+}
+
+.labelDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.taskInput[data-error="1"]::placeholder,
+.projectNameInput[data-error="1"]::placeholder {
+  color: #e53935;
+  opacity: 1; // ブラウザで薄くなるのを防ぐ
+}
+
+/* ちょい分かりやすくしたいならカード枠も赤く */
+.taskCard[data-error="1"] {
+  border-color: #e53935;
+}
+
+.detailBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 2000;
+
+  display: grid;
+  place-items: center;
+}
+
+.detailModal {
+  width: min(720px, 92vw);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
+  padding: 22px 22px 18px;
+}
+
+.detailTop {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.detailClose {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 22px;
+
+  &:hover { background: #eee; }
+}
+
+.detailTitle {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 14px;
+  font-size: 22px;
+  border: 2px solid rgba(0,0,0,0.18);
+  border-radius: 10px;
+  outline: none;
+}
+
+.detailMemoLabel {
+  margin-top: 16px;
+  font-size: 18px;
+}
+
+.detailMemo {
+  width: 100%;
+  height: 180px;
+  margin-top: 8px;
+  padding: 12px 14px;
+  font-size: 18px;
+  border: 2px solid rgba(0,0,0,0.18);
+  border-radius: 10px;
+  outline: none;
+  resize: none;
+}
+
+.detailFooter {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.detailSave {
+  border: none;
+  cursor: pointer;
+  background: #444;
+  color: #fff;
+  font-size: 18px;
+  padding: 10px 18px;
+  border-radius: 10px;
+
+  &:hover { filter: brightness(0.95); }
+}
+
+
+/* =========================
+   detail modal（⋮押した時の編集）
+   TaskModalっぽい見た目
+========================= */
+
+.detailBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000; // ProjectModalより上
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.detailModal {
+  width: min(820px, 50vw);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
+  padding: 28px 60px;
+  overflow: hidden;
+}
+
+/* 上段（×だけ右） */
+.detailTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 18px;
+}
+
+.detailIconBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid #a2a2a2;
+  background: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+
+  &:hover {
+    background: #f6f6f6;
+  }
+}
+
+/* タイトル中央 */
+.detailTitleWrap {
+  display: grid;
+  place-items: center;
+  margin: 10px 0 22px;
+}
+
+.detailTitleInput {
+  width: min(320px, 70vw);
+  height: 54px;
+  border-radius: 8px;
+  border: 2px solid #cfcfcf;
+
+  text-align: center;
+  font-size: 26px;
+  outline: none;
+
+  &:focus {
+    border-color: #9a9a9a;
+  }
+}
+
+/* メモ */
+.detailMemoWrap {
+  margin-top: 10px;
+}
+
+.detailMemoLabel {
+  font-size: 22px;
+  margin-bottom: 10px;
+  margin-left: 10px;
+}
+
+.detailMemoArea {
+  width: 100%;
+  height: 170px;
+  border-radius: 8px;
+  border: 2px solid #cfcfcf;
+  padding: 12px;
+
+  font-size: 16px;
+  resize: none;
+  outline: none;
+
+  &:focus {
+    border-color: #9a9a9a;
+  }
+}
+
+/* 下 保存・削除 */
+.detailActions {
+  display: flex;
+  justify-content: center; // TaskModalっぽく左右に置くなら center が合う
+  gap: 100px;
+  margin-top: 18px;
+}
+
+.detailDeleteBtn,
+.detailSaveBtn {
+  width: 120px;
+  height: 46px;
+  border-radius: 8px;
+  border: 0;
+  cursor: pointer;
+  font-size: 22px;
+  color: #fff;
+}
+
+
+
+.detailDeleteBtn {
+  background: #a96a6a;
+}
+
+.detailSaveBtn {
+  background: #444;
+}
+
+
+.confirmBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.confirmModal {
+  width: min(520px, 92vw);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
+  padding: 22px 22px 18px;
+}
+
+.confirmTitle {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.confirmText {
+  font-size: 16px;
+  color: #555;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.confirmCancel {
+  border: 1px solid rgba(0,0,0,0.25);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.confirmDelete {
+  border: none;
+  background: #a96a6a;
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
 }

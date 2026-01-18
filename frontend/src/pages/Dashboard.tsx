@@ -114,6 +114,7 @@ export default function Dashboard() {
   const [selectedLabelId, setSelectedLabelId] = useState<ID | null>(null);
   
   
+  
 
   // DB/APIに置き換える時も、ここを置き換えるだけでOKな形
   const [labels, setLabels] = useState<Label[]>(initialLabels);
@@ -398,6 +399,7 @@ const projectCards = projects
           setProjectOpen(false);
           setEditingProjectId(null);
         }}
+        labels={labels}
         project={editingProject}
         tasks={editingProjectTasks}
         onSave={(project, newTasks) => {
@@ -435,6 +437,18 @@ const projectCards = projects
               : [nextProject, ...prev];
           });
 
+          setProjectOpen(false);
+          setEditingProjectId(null);
+        }}
+        
+        onDelete={(projectId) => {
+          // ① プロジェクト配下タスクを全削除
+          setTasks((prev) => prev.filter((t) => t.project_id !== projectId));
+
+          // ② プロジェクト本体を削除
+          setProjects((prev) => prev.filter((p) => p.id !== projectId));
+
+          // ③ モーダル閉じる（確認後に呼ばれるけど安全に）
           setProjectOpen(false);
           setEditingProjectId(null);
         }}
