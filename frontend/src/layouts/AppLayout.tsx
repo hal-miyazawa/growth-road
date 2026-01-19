@@ -6,14 +6,15 @@ import type { ID, Label } from "../types/models";
 type Props = {
   children: React.ReactNode;
 
-  // ラベルフィルタ（Dashboardから渡す）
   labels: Label[];
   selectedLabelId: ID | null;
   onSelectLabel: (id: ID | null) => void;
-  onAddLabel: (name: string) => void;
 
-  // （任意）履歴を開く処理を外から渡したいなら追加できる
-  // onOpenHistory?: () => void;
+  // ★色も受け取る
+  onAddLabel: (name: string, color: string | null) => void;
+
+  // ★色更新
+  onUpdateLabelColor: (id: ID, color: string) => void;
 };
 
 export default function AppLayout({
@@ -22,6 +23,7 @@ export default function AppLayout({
   selectedLabelId,
   onSelectLabel,
   onAddLabel,
+  onUpdateLabelColor,
 }: Props) {
   const [open, setOpen] = useState(false);
 
@@ -35,14 +37,9 @@ export default function AppLayout({
         labels={labels}
         selectedLabelId={selectedLabelId}
         onSelectLabel={onSelectLabel}
-        onAddLabel={(name) => {
-          onAddLabel(name);
-          // 追加後もサイドバーは閉じない（入力継続しやすい）
-          // 閉じたいなら setOpen(false) を入れる
-        }}
-        onOpenHistory={() => {
-          console.log("history");
-        }}
+        onAddLabel={onAddLabel}
+        onUpdateLabelColor={onUpdateLabelColor}
+        onOpenHistory={() => console.log("history")}
       />
 
       <main>{children}</main>

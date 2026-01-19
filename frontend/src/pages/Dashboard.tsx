@@ -76,9 +76,7 @@ const initialTasks: Task[] = [
   { id: "solo-2", project_id: null, label_id: "label-work", parent_task_id: null, order_index: 1, title: "役所手続", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
 
   // 追加solo
-  { id: "solo-3", project_id: null, label_id: "label-study", parent_task_id: null, order_index: 2, title: "単語30分", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
   { id: "solo-4", project_id: null, label_id: "label-home", parent_task_id: null, order_index: 3, title: "買い出し", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "solo-5", project_id: null, label_id: "label-dev", parent_task_id: null, order_index: 4, title: "UIメモ整", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
   { id: "solo-6", project_id: null, label_id: "label-health", parent_task_id: null, order_index: 5, title: "水飲む", memo: "1.5L目標", completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
   { id: "solo-7", project_id: null, label_id: "label-money", parent_task_id: null, order_index: 6, title: "支出メモ", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
 ];
@@ -192,23 +190,29 @@ export default function Dashboard() {
 
   const uid = () => crypto.randomUUID?.() ?? String(Date.now() + Math.random());
 
-  const handleAddLabel = (name: string) => {
+  const handleAddLabel = (name: string, color: string | null) => {
     const ts = now();
 
-    // かぶり防止（同名は弾く or 末尾に(2)つける等。今は弾くでOK）
-    const exists = labels.some((l) => l.name.trim() === name.trim());
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    // 同名は弾く
+    const exists = labels.some((l) => l.name.trim() === trimmed);
     if (exists) return;
 
     const newLabel: Label = {
       id: `label-${uid()}` as ID,
-      name: name.trim(),
-      color: "#BDBDBD",     // 今は仮（あとで選択式にする）
+      name: trimmed,
+      color: color ?? "#BDBDBD", // ★ここ：選んだ色を保存
       created_at: ts,
     };
 
     setLabels((prev) => [...prev, newLabel]);
   };
-  
+
+  const handleUpdateLabelColor = (id: ID, color: string) => {
+    setLabels((prev) => prev.map((l) => (l.id === id ? { ...l, color } : l)));
+  };
 
   // ＋押したときのハンドラ
   const openProjectFromSoloTask = (t: Task) => {
@@ -353,6 +357,7 @@ const projectCards = projects
       selectedLabelId={selectedLabelId}
       onSelectLabel={setSelectedLabelId}
       onAddLabel={handleAddLabel}
+      onUpdateLabelColor={handleUpdateLabelColor}
     >
       <div className={styles.page}>
         <div className={styles.grid}>

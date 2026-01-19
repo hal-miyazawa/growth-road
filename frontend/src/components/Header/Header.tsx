@@ -23,8 +23,9 @@ export default function Header({ title = "GrowthRoad", onMenuClick }: HeaderProp
 
       <div className={styles.right}>
         <select className={styles.select} aria-label="view">
-          <option>プロジェクト</option>
-          <option>タスク</option>
+          <option>作成日</option>
+          <option>更新日</option>
+          <option>優先度順</option>
         </select>
         <button className={styles.iconBtn} aria-label="settings" type="button">
           ⚙
