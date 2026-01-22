@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from database import get_db
-from api_schemas.label import LabelCreate, LabelRead, LabelUpdate
-import crud  # ← crud.py を入口にするならこれでOK（今の君の形）
+from schemas import LabelCreate, LabelRead, LabelUpdate
+import crud
 
 router = APIRouter(prefix="/labels", tags=["labels"])
 
@@ -31,7 +31,18 @@ def update_label(label_id: str, payload: LabelUpdate, db: Session = Depends(get_
 
 @router.delete("/{label_id}", status_code=204)
 def delete_label(label_id: str, db: Session = Depends(get_db)):
-    ok = crud.delete_label(db, label_id)
-    if not ok:
+    result = crud.delete_label(db, label_id)
+
+    if result == "not_found":
         raise HTTPException(status_code=404, detail="Label not found")
+
+    if result == "in_use":
+        raise HTTPException(
+            status_code=409,
+            detail="This label is used by some projects/tasks, so it can't be deleted."
+        )
+
+    if result != "deleted":
+        raise HTTPException(status_code=500, detail=f"Unexpected result: {result}")
+
     return

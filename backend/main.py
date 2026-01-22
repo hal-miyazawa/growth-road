@@ -1,45 +1,54 @@
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-import models
 
-# 例：Project/Task のスキーマが schemas.py 側にある場合
-import schemas as api_schemas
+from database import engine, Base, get_db
+import crud
+from schemas import ProjectCreate, ProjectRead, ProjectWithTasks, TaskCreate, TaskRead
 
-# labels は api_schemas.label を使ってるので、crud/labels.py から取り込みはOK
-from crud.labels import (
-    list_labels,
-    get_label,
-    get_label_by_name,
-    create_label,
-    update_label,
-    delete_label,
+# ルータ
+from routers.labels import router as labels_router
+
+# テーブル作成のために読み込み
+import models  # ← models/__init__.py が読み込まれて全モデル登録される
+
+
+app = FastAPI(title="Growth Road API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+app.include_router(labels_router, prefix="/api")
 
-def create_project(db: Session, project: api_schemas.ProjectCreate):
-    db_project = models.Project(
-        title=project.title,
-        description=project.description,
-    )
-    db.add(db_project)
-    db.commit()
-    db.refresh(db_project)
-    return db_project
+@app.on_event("startup")
+def on_startup():
+    Base.metadata.create_all(bind=engine)
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
-def get_projects(db: Session):
-    return db.query(models.Project).all()
+# Project
+@app.post("/projects", response_model=ProjectRead)
+def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
+    return crud.create_project(db, project)
 
+@app.get("/projects", response_model=list[ProjectRead])
+def read_projects(db: Session = Depends(get_db)):
+    return crud.list_projects(db)  # ← ここは君のcrud名に合わせて
 
-def create_task(db: Session, task: api_schemas.TaskCreate):
-    db_task = models.Task(
-        project_id=task.project_id,
-        title=task.title,
-    )
-    db.add(db_task)
-    db.commit()
-    db.refresh(db_task)
-    return db_task
+@app.post("/tasks", response_model=TaskRead)
+def create_task(task: TaskCreate, db: Session = Depends(get_db)):
+    return crud.create_task(db, task)
 
-
-def get_projects_with_tasks(db: Session):
-    return db.query(models.Project).all()
+@app.get("/projects-with-tasks", response_model=list[ProjectWithTasks])
+def read_projects_with_tasks(db: Session = Depends(get_db)):
+    return crud.get_projects_with_tasks(db)

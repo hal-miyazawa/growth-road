@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/api"; // パスは実ファイルに合わせて
 import AppLayout from "../layouts/AppLayout";
 import ProjectCard from "../components/ProjectCard/ProjectCard";
 import styles from "./Dashboard.module.scss";
@@ -9,19 +10,16 @@ import type { ID, Label, Project, Task } from "../types/models";
 
 const now = () => new Date().toISOString();
 
+const legacyLabelNameById: Record<string, string> = {
+  "label-study": "資格勉強",
+  "label-home": "家事",
+  "label-work": "仕事",
+  "label-health": "健康",
+  "label-dev": "開発",
+  "label-money": "バイト",
+};
 
-// --- mock（あとでDB/APIに置き換える） ---
-const initialLabels: Label[] = [
-  { id: "label-study", name: "資格勉強", color: "#95A0E6", created_at: now() },
-  { id: "label-home", name: "家事",  color: "#8AD08A", created_at: now() },
-  { id: "label-work", name: "仕事", color: "#BDBDBD", created_at: now() },
-
-  // 追加ラベル
-  { id: "label-health", name: "健康", color: "#E6A695", created_at: now() },
-  { id: "label-dev", name: "開発", color: "#8AC7D0", created_at: now() },
-  { id: "label-money", name: "お金", color: "#D0C98A", created_at: now() },
-];
-
+// --- mock（あとでDB/APIに置き換える） --
 const initialProjects: Project[] = [
   { id: "proj-study", name: "学習", label_id: "label-study", current_order_index: 0, created_at: now(), updated_at: now() },
   { id: "proj-home", name: "家事", label_id: "label-home", current_order_index: 0, created_at: now(), updated_at: now() },
@@ -169,7 +167,7 @@ export default function Dashboard() {
   
 
   // DB/APIに置き換える時も、ここを置き換えるだけでOKな形
-  const [labels, setLabels] = useState<Label[]>(initialLabels);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [projects, setProjects] = useState<Project[]>(initialProjects);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
 
@@ -188,30 +186,48 @@ export default function Dashboard() {
     return map;
   }, [projects, tasks]);
 
-  const uid = () => crypto.randomUUID?.() ?? String(Date.now() + Math.random());
-
-  const handleAddLabel = (name: string, color: string | null) => {
-    const ts = now();
-
+  const handleAddLabel = async (name: string, color: string | null) => {
     const trimmed = name.trim();
     if (!trimmed) return;
 
-    // 同名は弾く
-    const exists = labels.some((l) => l.name.trim() === trimmed);
-    if (exists) return;
+    // 同名弾き（サーバーでも弾いてるがUXとして）
+    if (labels.some((l) => l.name.trim() === trimmed)) return;
 
-    const newLabel: Label = {
-      id: `label-${uid()}` as ID,
+    const created = await apiPost<Label>("/api/labels", {
       name: trimmed,
-      color: color ?? "#BDBDBD", // ★ここ：選んだ色を保存
-      created_at: ts,
-    };
+      color,
+    });
 
-    setLabels((prev) => [...prev, newLabel]);
+    setLabels((prev) => [...prev, created]);
   };
 
-  const handleUpdateLabelColor = (id: ID, color: string) => {
-    setLabels((prev) => prev.map((l) => (l.id === id ? { ...l, color } : l)));
+  
+  const handleUpdateLabelColor = async (id: ID, color: string) => {
+    const updated = await apiPatch<Label>(`/api/labels/${id}`, { color });
+    setLabels((prev) => prev.map((l) => (l.id === id ? updated : l)));
+  };
+
+  const handleDeleteLabel = async (id: ID) => {
+    // フロント側でも「使用中」ブロック（DBと整合）
+    const usedByProject = projects.some((p) => p.label_id === id);
+    const usedByTask = tasks.some((t) => t.label_id === id);
+    if (usedByProject || usedByTask) {
+      alert("このラベルはプロジェクト/タスクで使用中なので削除できません。");
+      return;
+    }
+
+    try {
+      await apiDelete(`/api/labels/${id}`);
+      setLabels((prev) => prev.filter((l) => l.id !== id));
+
+      // 保険：もし残ってたらラベル参照を外す（将来の事故防止）
+      setProjects((prev) => prev.map((p) => (p.label_id === id ? { ...p, label_id: null } : p)));
+      setTasks((prev) => prev.map((t) => (t.label_id === id ? { ...t, label_id: null } : t)));
+
+      if (selectedLabelId === id) setSelectedLabelId(null);
+    } catch (e) {
+      alert("削除に失敗しました（使用中の可能性あり）");
+    }
   };
 
   // ＋押したときのハンドラ
@@ -235,6 +251,33 @@ export default function Dashboard() {
     }
     return flat.length; // 次が無い（カードは “次のタスクなし” 表示になる）
   };
+
+  // 初回ロード
+  useEffect(() => {
+    (async () => {
+      const serverLabels = await apiGet<Label[]>("/api/labels");
+      setLabels(serverLabels);
+
+      // ---- ここでモック側のlabel_idをサーバーのlabel_idへ寄せる ----
+      const nameToId = new Map(serverLabels.map((l) => [l.name.trim(), l.id]));
+
+      setProjects((prev) =>
+        prev.map((p) => {
+          const legacyName = p.label_id ? legacyLabelNameById[p.label_id] : null;
+          const newId = legacyName ? nameToId.get(legacyName) : null;
+          return newId ? { ...p, label_id: newId } : p;
+        })
+      );
+
+      setTasks((prev) =>
+        prev.map((t) => {
+          const legacyName = t.label_id ? legacyLabelNameById[t.label_id] : null;
+          const newId = legacyName ? nameToId.get(legacyName) : null;
+          return newId ? { ...t, label_id: newId } : t;
+        })
+      );
+    })().catch(console.error);
+  }, []);
 
   // カード表示用VM
   const cards = useMemo(() => {
@@ -358,6 +401,7 @@ const projectCards = projects
       onSelectLabel={setSelectedLabelId}
       onAddLabel={handleAddLabel}
       onUpdateLabelColor={handleUpdateLabelColor}
+      onDeleteLabel={handleDeleteLabel}
     >
       <div className={styles.page}>
         <div className={styles.grid}>

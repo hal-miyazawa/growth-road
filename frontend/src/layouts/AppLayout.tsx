@@ -15,6 +15,9 @@ type Props = {
 
   // ★色更新
   onUpdateLabelColor: (id: ID, color: string) => void;
+
+  
+  onDeleteLabel?: (id: ID) => void; // ★追加
 };
 
 export default function AppLayout({
@@ -24,6 +27,7 @@ export default function AppLayout({
   onSelectLabel,
   onAddLabel,
   onUpdateLabelColor,
+  onDeleteLabel, // ★追加
 }: Props) {
   const [open, setOpen] = useState(false);
 
@@ -40,6 +44,7 @@ export default function AppLayout({
         onAddLabel={onAddLabel}
         onUpdateLabelColor={onUpdateLabelColor}
         onOpenHistory={() => console.log("history")}
+        onDeleteLabel={onDeleteLabel} // ★ここ追加
       />
 
       <main>{children}</main>
