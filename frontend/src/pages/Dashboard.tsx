@@ -497,7 +497,7 @@ export default function Dashboard() {
           }}
           labels={labels}
           task={editingTaskId ? taskById.get(editingTaskId) ?? null : null}
-          onDelete={(id) => {
+          onDelete={async (id) => {
             // 削除対象のタスクを取得（なければ何もしない）
             const target = taskById.get(id);
             if (!target) return;
@@ -508,6 +508,13 @@ export default function Dashboard() {
             const beforeFlat =
               projectId ? (flatIdsByProject.get(projectId) ?? []) : [];
             const removedIndex = beforeFlat.indexOf(id);
+
+            try {
+              await apiDelete(`/api/tasks/${id}`);
+            } catch (e) {
+              console.error(e);
+              return;
+            }
 
             // 1) タスク削除
             setTasks((prev) => prev.filter((t) => t.id !== id));
@@ -532,18 +539,60 @@ export default function Dashboard() {
             setTaskOpen(false);
             setEditingTaskId(null);
           }}
-          onSave={(incoming) => {
+          onSave={async (incoming) => {
             if (editingTaskId) {
-              setTasks((prev) => prev.map((t) => (t.id === incoming.id ? incoming : t)));
-            } else {
-              setTasks((prev) => {
-                const max = Math.max(
-                  -1,
-                  ...prev.filter((t) => !t.project_id).map((t) => t.order_index ?? 0)
+              const patchBody = {
+                title: incoming.title,
+                memo: incoming.memo ?? null,
+                label_id: incoming.label_id ?? null,
+                project_id: incoming.project_id ?? null,
+                parent_task_id: incoming.parent_task_id ?? null,
+                completed: incoming.completed,
+                completed_at: incoming.completed_at ?? null,
+                is_fixed: incoming.is_fixed ?? false,
+                is_group: incoming.is_group ?? false,
+                order_index: incoming.order_index,
+              };
+
+              try {
+                const updated = await apiPatch<Task>(
+                  `/api/tasks/${incoming.id}`,
+                  patchBody
                 );
-                return [...prev, { ...incoming, order_index: max + 1 }];
-              });
+                setTasks((prev) =>
+                  prev.map((t) => (t.id === incoming.id ? updated : t))
+                );
+              } catch (e) {
+                console.error(e);
+              }
+
+              setTaskOpen(false);
+              setEditingTaskId(null);
+              return;
             }
+
+            const max = Math.max(
+              -1,
+              ...tasks.filter((t) => !t.project_id).map((t) => t.order_index ?? 0)
+            );
+            const payload = {
+              title: incoming.title,
+              memo: incoming.memo ?? null,
+              label_id: incoming.label_id ?? null,
+              project_id: incoming.project_id ?? null,
+              parent_task_id: incoming.parent_task_id ?? null,
+              order_index: max + 1,
+              is_group: incoming.is_group ?? false,
+              is_fixed: incoming.is_fixed ?? false,
+            };
+
+            try {
+              const created = await apiPost<Task>("/api/tasks", payload);
+              setTasks((prev) => [...prev, created]);
+            } catch (e) {
+              console.error(e);
+            }
+
             setTaskOpen(false);
             setEditingTaskId(null);
           }}

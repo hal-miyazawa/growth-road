@@ -16,5 +16,8 @@ from .projects import (
 
 from .tasks import (
     create_task,
+    delete_task,
+    get_task,
     list_tasks,
+    update_task,
 )

@@ -1,9 +1,10 @@
 # crud/tasks.py
+from datetime import datetime
 from sqlalchemy.orm import Session
 import uuid
 
 from models.task import Task
-from schemas import TaskCreate
+from schemas import TaskCreate, TaskUpdate
 
 
 def _new_id(prefix: str) -> str:
@@ -28,6 +29,41 @@ def create_task(db: Session, payload: TaskCreate):
     db.commit()
     db.refresh(obj)
     return obj
+
+
+def get_task(db: Session, task_id: str):
+    return db.query(Task).filter(Task.id == task_id).first()
+
+
+def update_task(db: Session, task_id: str, payload: TaskUpdate):
+    obj = get_task(db, task_id)
+    if not obj:
+        return None
+
+    updates = payload.model_dump(exclude_unset=True)
+    for key, value in updates.items():
+        setattr(obj, key, value)
+
+    obj.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def delete_task(db: Session, task_id: str) -> str:
+    """
+    return:
+      - "deleted"
+      - "not_found"
+    """
+    obj = get_task(db, task_id)
+    if not obj:
+        return "not_found"
+
+    db.delete(obj)
+    db.commit()
+    return "deleted"
 
 
 def list_tasks(db: Session):

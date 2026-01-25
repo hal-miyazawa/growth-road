@@ -14,6 +14,18 @@ class TaskCreate(BaseModel):
     is_fixed: bool = False
     is_group: bool = False
 
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    memo: Optional[str] = None
+    label_id: Optional[str] = None
+    project_id: Optional[str] = None
+    parent_task_id: Optional[str] = None
+    order_index: Optional[int] = None
+    completed: Optional[bool] = None
+    completed_at: Optional[datetime] = None
+    is_fixed: Optional[bool] = None
+    is_group: Optional[bool] = None
+
 class TaskRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
