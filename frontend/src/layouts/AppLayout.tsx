@@ -11,7 +11,7 @@ type Props = {
   onSelectLabel: (id: ID | null) => void;
 
   // ★色も受け取る
-  onAddLabel: (name: string, color: string | null) => void;
+  onAddLabel: (title: string, color: string | null) => void;
 
   // ★色更新
   onUpdateLabelColor: (id: ID, color: string) => void;

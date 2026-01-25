@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { createContext, useContext, useEffect, useRef, useState } from "react";
+import type React from "react";
 import styles from "./Sidebar.module.scss";
 import type { ID, Label } from "../../types/models";
 
@@ -7,19 +8,23 @@ type Props = {
   onClose: () => void;
 
   labels: Label[];
-  selectedLabelId: ID | null; // null = 全部表示
+  selectedLabelId: ID | null; // null = 蜈ｨ驛ｨ陦ｨ遉ｺ
   onSelectLabel: (id: ID | null) => void;
 
   onOpenHistory?: () => void;
 
-  // ★変更：色も持てるように（親で labels 更新）
-  onAddLabel: (name: string, color: string | null) => void;
-
-  // ★追加：既存ラベルの色更新（親でlabels更新）
+  onAddLabel: (title: string, color: string | null) => void;
   onUpdateLabelColor?: (id: ID, color: string) => void;
-
   onDeleteLabel?: (id: ID) => void;
+  onRenameLabel?: (id: ID, title: string) => Promise<void> | void;
 };
+
+type LabelRenameContextValue = {
+  onRenameLabel?: (id: ID, title: string) => Promise<void> | void;
+};
+
+export const LabelRenameContext =
+  createContext<LabelRenameContextValue | null>(null);
 
 const PALETTE: string[] = [
   "#212121",
@@ -50,7 +55,7 @@ type PickerState =
   | {
       open: true;
       target: "label";
-      labelId: ID;          // ← labelの時は必須にする
+      labelId: ID;
       top: number;
       left: number;
       current?: string | null;
@@ -73,43 +78,61 @@ export default function Sidebar({
   onAddLabel,
   onUpdateLabelColor,
   onDeleteLabel,
+  onRenameLabel,
 }: Props) {
-  // 追加モード（ラベル追加行が input に変形）
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftColor, setDraftColor] = useState<string | null>("#0D47A1");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const editInputRef = useRef<HTMLInputElement | null>(null);
+
   const [moreOpenId, setMoreOpenId] = useState<ID | null>(null);
   const moreWrapRef = useRef<HTMLDivElement | null>(null);
+
   const [forceExpanded, setForceExpanded] = useState(false);
-
-
-
-  // ★追加：カラーピッカー
   const [picker, setPicker] = useState<PickerState>({ open: false });
+  const [editingLabelId, setEditingLabelId] = useState<ID | null>(null);
+  const [editDraft, setEditDraft] = useState("");
 
-  // ★追加：入力中は強制的にexpanded扱い
+  const renameContext = useContext(LabelRenameContext);
+  const renameLabel = onRenameLabel ?? renameContext?.onRenameLabel;
+
   const expanded = open || adding || forceExpanded;
 
-
-  // 追加モードになったらフォーカス
   useEffect(() => {
     if (adding) inputRef.current?.focus();
   }, [adding]);
 
-  // ★ポップアップ外クリックで閉じる
+  useEffect(() => {
+    if (!editingLabelId) return;
+    editInputRef.current?.focus();
+    editInputRef.current?.select();
+  }, [editingLabelId]);
+
+  useEffect(() => {
+    if (!editingLabelId) return;
+    if (labels.some((l) => l.id === editingLabelId)) return;
+    setEditingLabelId(null);
+    setEditDraft("");
+  }, [editingLabelId, labels]);
+
   useEffect(() => {
     if (!picker.open) return;
 
     const onDown = (e: PointerEvent) => {
       const el = e.target as HTMLElement | null;
       if (!el) return;
-      if (el.closest(`.${styles.colorPopover}`)) return; // ポップアップ内ならOK
+      if (el.closest(`.${styles.colorPopover}`)) return;
       setPicker({ open: false });
     };
 
     window.addEventListener("pointerdown", onDown, { capture: true });
-    return () => window.removeEventListener("pointerdown", onDown, { capture: true } as any);
+    return () =>
+      window.removeEventListener(
+        "pointerdown",
+        onDown,
+        { capture: true } as any
+      );
   }, [picker.open]);
 
   useEffect(() => {
@@ -125,14 +148,13 @@ export default function Sidebar({
   }, [moreOpenId]);
 
   const commit = () => {
-    const name = draft.trim();
-    if (!name) return; // 空なら閉じない（おすすめ）
+    const title = draft.trim();
+    if (!title) return;
 
-    onAddLabel(name, draftColor);
+    onAddLabel(title, draftColor);
 
     setAdding(false);
     setDraft("");
-    // setForceExpanded(true); // すでにtrueのはずなので不要
   };
 
   const cancel = () => {
@@ -140,6 +162,39 @@ export default function Sidebar({
     setDraft("");
   };
 
+  const startEdit = (label: Label) => {
+    setEditingLabelId(label.id);
+    setEditDraft(label.title);
+    setMoreOpenId(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingLabelId(null);
+    setEditDraft("");
+  };
+
+  const commitEdit = async (labelId: ID) => {
+    const nextTitle = editDraft.trim();
+    if (!nextTitle) return;
+
+    const current = labels.find((l) => l.id === labelId);
+    if (current && current.title === nextTitle) {
+      cancelEdit();
+      return;
+    }
+
+    if (!renameLabel) {
+      cancelEdit();
+      return;
+    }
+
+    try {
+      await renameLabel(labelId, nextTitle);
+      cancelEdit();
+    } catch {
+      alert("Label rename failed.");
+    }
+  };
 
   const openPickerFor = (
     e: React.MouseEvent,
@@ -149,30 +204,29 @@ export default function Sidebar({
   ) => {
     e.stopPropagation();
 
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const top = rect.top + rect.height + 8;
-  const left = rect.left;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const top = rect.top + rect.height + 8;
+    const left = rect.left;
 
-
-  if (args.target === "label") {
-    setPicker({
-      open: true,
-      target: "label",
-      labelId: args.labelId,     // ← ここが安全に参照できる
-      top,
-      left,
-      current: args.current ?? null,
-    });
-  } else {
-    setPicker({
-      open: true,
-      target: "new",
-      top,
-      left,
-      current: args.current ?? null,
-    });
-  }
-};
+    if (args.target === "label") {
+      setPicker({
+        open: true,
+        target: "label",
+        labelId: args.labelId,
+        top,
+        left,
+        current: args.current ?? null,
+      });
+    } else {
+      setPicker({
+        open: true,
+        target: "new",
+        top,
+        left,
+        current: args.current ?? null,
+      });
+    }
+  };
 
   const chooseColor = (color: string) => {
     if (!picker.open) return;
@@ -189,7 +243,7 @@ export default function Sidebar({
     setAdding(false);
     setDraft("");
     setPicker({ open: false });
-    setForceExpanded(false); // ★強制展開も解除
+    setForceExpanded(false);
   };
 
   return (
@@ -198,15 +252,13 @@ export default function Sidebar({
         <div
           className={styles.backdrop}
           onClick={() => {
-            closeAddMode();     // ★作成中やめる（adding/picker/forceExpanded解除）
-            setMoreOpenId(null); // ★⋮開いてたら閉じる（任意だけど自然）
-            setPicker({ open: false }); // closeAddModeに入ってるなら不要
-            onClose();          // ★サイドバー閉じる
+            closeAddMode();
+            setMoreOpenId(null);
+            onClose();
           }}
         />
       )}
 
-      {/* ★カラーポップアップ */}
       {picker.open && (
         <div
           className={styles.colorPopover}
@@ -238,7 +290,6 @@ export default function Sidebar({
         }`}
       >
         <nav className={styles.nav}>
-          {/* 総合（固定） */}
           <button
             type="button"
             className={`${styles.item} ${
@@ -249,18 +300,24 @@ export default function Sidebar({
               onClose();
             }}
           >
-            <span className={`${styles.icon} ${styles.iconSummary}`}>▦</span>
+            <span className={styles.icon}>📋</span>
             <span className={styles.label}>総合</span>
           </button>
 
-          {/* ラベル一覧 */}
           {labels.map((l) => (
-            <div className={styles.rowWrap} key={l.id} ref={moreOpenId === l.id ? moreWrapRef : undefined}>
+            <div
+              className={styles.rowWrap}
+              key={l.id}
+              ref={moreOpenId === l.id ? moreWrapRef : undefined}
+            >
               <button
                 type="button"
-                className={`${styles.item} ${selectedLabelId === l.id ? styles.active : ""}`}
+                className={`${styles.item} ${
+                  selectedLabelId === l.id ? styles.active : ""
+                }`}
                 onClick={() => {
-                  closeAddMode();   
+                  if (editingLabelId === l.id) return;
+                  closeAddMode();
                   onSelectLabel(l.id);
                   onClose();
                 }}
@@ -270,14 +327,46 @@ export default function Sidebar({
                   style={{ backgroundColor: l.color ?? "#BDBDBD" }}
                   aria-hidden="true"
                   onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => openPickerFor(e, { target: "label", labelId: l.id, current: l.color ?? null })}
+                  onClick={(e) =>
+                    openPickerFor(e, {
+                      target: "label",
+                      labelId: l.id,
+                      current: l.color ?? null,
+                    })
+                  }
                 />
-                <span className={styles.label}>{l.name}</span>
+                {editingLabelId === l.id ? (
+                  <input
+                    ref={editInputRef}
+                    className={styles.inlineInput}
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void commitEdit(l.id);
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        cancelEdit();
+                      }
+                    }}
+                    onBlur={cancelEdit}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="label title"
+                  />
+                ) : (
+                  <span className={styles.label}>{l.title}</span>
+                )}
 
-                {/* ⋮ボタン */}
                 <button
                   type="button"
-                  className={`${styles.moreBtn} ${selectedLabelId === l.id ? styles.moreBtnActive : ""}`}
+                  className={`${styles.moreBtn} ${
+                    selectedLabelId === l.id ? styles.moreBtnActive : ""
+                  }`}
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -289,16 +378,16 @@ export default function Sidebar({
                 </button>
               </button>
 
-              {/* メニュー：ProjectModalのlabelMenu UIを流用 */}
               {moreOpenId === l.id && (
-                <div className={styles.labelMenu} onMouseDown={(e) => e.stopPropagation()}>
+                <div
+                  className={styles.labelMenu}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
                   <button
                     type="button"
                     className={styles.labelItem}
                     onClick={() => {
-                      // TODO: 編集（名前変更モードにする等）
-                      console.log("edit", l.id);
-                      setMoreOpenId(null);
+                      startEdit(l);
                     }}
                   >
                     編集
@@ -319,18 +408,17 @@ export default function Sidebar({
             </div>
           ))}
 
-          {/* ラベル追加 */}
           {!adding ? (
             <button
               type="button"
               className={styles.item}
               onClick={() => {
                 setAdding(true);
-                setForceExpanded(true); // ★追加中は展開を維持
+                setForceExpanded(true);
               }}
             >
               <span className={styles.icon}>＋</span>
-              <span className={styles.label}>ラベル追加</span>
+              <span className={styles.label}>新しいラベル</span>
             </button>
           ) : (
             <button
@@ -344,14 +432,17 @@ export default function Sidebar({
                   style={{ backgroundColor: draftColor ?? "#BDBDBD" }}
                   aria-hidden="true"
                   onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => openPickerFor(e, { target: "new", current: draftColor })}
+                  onClick={(e) =>
+                    openPickerFor(e, { target: "new", current: draftColor })
+                  }
                 />
               </span>
+
               <input
                 ref={inputRef}
                 className={styles.inlineInput}
                 value={draft}
-                placeholder="新しいラベル名"
+                placeholder="ラベル名"
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") commit();
@@ -363,7 +454,6 @@ export default function Sidebar({
             </button>
           )}
 
-          {/* 履歴（固定） */}
           <button
             type="button"
             className={styles.item}
@@ -372,7 +462,7 @@ export default function Sidebar({
               onClose();
             }}
           >
-            <span className={styles.icon}>↩︎</span>
+            <span className={styles.icon}>🕘</span>
             <span className={styles.label}>履歴</span>
           </button>
         </nav>
@@ -380,3 +470,4 @@ export default function Sidebar({
     </>
   );
 }
+

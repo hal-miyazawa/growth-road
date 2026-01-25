@@ -1,6 +1,6 @@
 export type Label = {
   id: string;
-  name: string;
+  title: string;
   color: string | null;
   created_at: string;
 };

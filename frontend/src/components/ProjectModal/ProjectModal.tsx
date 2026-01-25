@@ -7,29 +7,24 @@ type Props = {
   onClose: () => void;
   onSave: (project: Project, tasks: Task[]) => void;
 
-  // ★これを追加
   labels: Label[];
 
   project?: Project | null;
   tasks?: Task[] | null;
-    // ★追加：プロジェクト削除
+
   onDelete?: (projectId: ID) => void;
 
-  // ★追加：soloタスク → プロジェクト化
+  // soloタスク → project化の引き継ぎ
   convertTaskId?: ID | null;
   convertTaskTitle?: string;
   convertTaskMemo?: string | null;
   convertLabelId?: ID | null;
-  onConvertToProject?: (task: Task) => void;
 };
 
 const uid = () => crypto.randomUUID?.() ?? String(Date.now() + Math.random());
 const now = () => new Date().toISOString();
 
-/**
- * order_index を必ず 0..n-1 に整える（欠番/重複を絶対に作らない）
- * ※ここでは「配列順」基準で正規化
- */
+/** order_index を 0..n-1 に正規化（欠番/重複を作らない） */
 function normalizeOrderIndex(list: Task[]): Task[] {
   const ts = now();
   return list.map((t, i) => ({
@@ -39,23 +34,32 @@ function normalizeOrderIndex(list: Task[]): Task[] {
   }));
 }
 
-function createDraftTask(
-  projectId: ID,
-  title = "",
-  parentTaskId: ID | null = null
-): Task {
+function createDraftProject(labelId: ID | null = null): Project {
   const ts = now();
   return {
-    id: uid(),
+    id: uid() as ID,
+    title: "",
+    label_id: labelId,
+    current_order_index: 0,
+    created_at: ts,
+    updated_at: ts,
+  };
+}
+
+function createDraftTask(projectId: ID, title = "", parentTaskId: ID | null = null): Task {
+  const ts = now();
+  return {
+    id: uid() as ID,
+    title,
     project_id: projectId,
     label_id: null,
     parent_task_id: parentTaskId,
     order_index: 0,
-    title,
     memo: null,
     completed: false,
     completed_at: null,
     is_fixed: false,
+    is_group: false,
     created_at: ts,
     updated_at: ts,
   };
@@ -63,7 +67,7 @@ function createDraftTask(
 
 type ViewRow = {
   t: Task;
-  depth: number;          // ★ 0|1 をやめる
+  depth: number;
   hasChildren: boolean;
   isExpanded: boolean;
 };
@@ -81,59 +85,52 @@ export default function ProjectModal({
   convertTaskMemo,
   convertLabelId,
 }: Props) {
-  const [projectNameError, setProjectNameError] = useState<string | null>(null);
-  const [taskErrors, setTaskErrors] = useState<Record<ID, string | null>>({});
+  const isEdit = !!project;
+
   const [submitTried, setSubmitTried] = useState(false);
+  const [projectTitleError, setProjectTitleError] = useState<string | null>(null);
+  const [taskErrors, setTaskErrors] = useState<Record<ID, string | null>>({});
+
   const [labelOpen, setLabelOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailTaskId, setDetailTaskId] = useState<ID | null>(null);
   const labelWrapRef = useRef<HTMLDivElement | null>(null);
+
   const [moreOpenTaskId, setMoreOpenTaskId] = useState<ID | null>(null);
   const moreWrapRefs = useRef(new Map<ID, HTMLDivElement>());
+
+  // 「projectize」した親ID（保存前クリーニング用）
   const [projectizedIds, setProjectizedIds] = useState<Set<ID>>(() => new Set<ID>());
 
+  // 展開状態
+  const [expandedIds, setExpandedIds] = useState<Set<ID>>(() => new Set<ID>());
 
-
-  // 詳細モーダル内の入力（編集中だけ使う）
+  // 詳細モーダル
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailTaskId, setDetailTaskId] = useState<ID | null>(null);
   const [detailTitle, setDetailTitle] = useState("");
   const [detailMemo, setDetailMemo] = useState<string>("");
 
-  const isEdit = !!project;               // 既に編集モード判定に使える
+  // 削除確認
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  const [draftProject, setDraftProject] = useState<Project>(() =>
+    createDraftProject(convertLabelId ?? null)
+  );
+  const [draftTasks, setDraftTasks] = useState<Task[]>([]);
 
-  // 展開状態
-  const [expandedIds, setExpandedIds] = useState<Set<ID>>(new Set());
-
-  const [draftProject, setDraftProject] = useState<Project>(() => {
-    const ts = now();
-    return {
-      id: uid(),
-      name: "",
-      label_id: null,
-      current_order_index: 0,
-      created_at: ts,
-      updated_at: ts,
-    };
-  });
-
-  const [draftTasks, setDraftTasks] = useState<Task[]>(() => {
-    const projectId = uid();
-    return normalizeOrderIndex([createDraftTask(projectId), createDraftTask(projectId),createDraftTask(projectId)]);
-  });
-
-  // open時に新規/編集で初期化
+  /** open時に初期化 */
   useEffect(() => {
     if (!open) return;
 
     setSubmitTried(false);
-    setProjectNameError(null);
+    setProjectTitleError(null);
     setTaskErrors({});
     setExpandedIds(new Set());
+    setMoreOpenTaskId(null);
+    setProjectizedIds(new Set());
 
     const ts = now();
 
-    // ===== 編集モード =====
+    // 編集モード
     if (project) {
       setDraftProject({ ...project, updated_at: ts });
 
@@ -141,51 +138,35 @@ export default function ProjectModal({
         .map((t) => ({ ...t }))
         .sort((a, b) => a.order_index - b.order_index);
 
-      // root（parent_task_id=null）が1件未満なら追加して1件に
+      // rootが0なら最低1件確保
       const rootCount = base.filter((t) => !t.parent_task_id).length;
-
-      const ensured =
-        rootCount > 0
-          ? base
-          : [...base, createDraftTask(project.id, "", null)];
+      const ensured = rootCount > 0 ? base : [...base, createDraftTask(project.id, "", null)];
 
       setDraftTasks(normalizeOrderIndex(ensured));
       return;
     }
 
-    // ===== 新規作成モード =====
-    const newProjectId = uid();
-    setDraftProject({
-      id: newProjectId,
-      name: "",
-      label_id: convertLabelId ?? null, // ★ここ
-      current_order_index: 0,
-      created_at: ts,
-      updated_at: ts,
-    });
+    // 新規作成モード
+    const p = createDraftProject(convertLabelId ?? null);
+    setDraftProject(p);
 
-    const base = [
-      createDraftTask(newProjectId),
-      createDraftTask(newProjectId),
-      createDraftTask(newProjectId),
-    ];
+    const base: Task[] = [createDraftTask(p.id), createDraftTask(p.id), createDraftTask(p.id)];
 
-    // convert ありなら「1個目」に差し込む
+    // solo→project化の引き継ぎ（1個目へ）
     if (convertTaskId) {
       base[0] = {
         ...base[0],
-        id: convertTaskId,                 // ★ID引き継ぎ（これがキモ）
+        id: convertTaskId,
         title: convertTaskTitle ?? "",
         memo: convertTaskMemo ?? null,
         updated_at: ts,
       };
     }
 
-setDraftTasks(normalizeOrderIndex(base));
+    setDraftTasks(normalizeOrderIndex(base));
+  }, [open, project, tasks, convertTaskId, convertTaskTitle, convertTaskMemo, convertLabelId]);
 
-  }, [open, project, tasks, convertTaskId, convertTaskTitle, convertTaskMemo]);
-
-  // Escで閉じる
+  /** Escで閉じる */
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -195,10 +176,9 @@ setDraftTasks(normalizeOrderIndex(base));
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // ラベルメニュー：外クリックで閉じる
+  /** ラベルメニュー外クリックで閉じる */
   useEffect(() => {
-    if (!open) return;
-    if (!labelOpen) return;
+    if (!open || !labelOpen) return;
 
     const onMouseDown = (e: MouseEvent) => {
       const el = labelWrapRef.current;
@@ -210,10 +190,9 @@ setDraftTasks(normalizeOrderIndex(base));
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [open, labelOpen]);
 
-  // ⋮の外クリックで閉じる
+  /** ⋮メニュー外クリックで閉じる */
   useEffect(() => {
-    if (!open) return;
-    if (!moreOpenTaskId) return;
+    if (!open || !moreOpenTaskId) return;
 
     const onMouseDown = (e: MouseEvent) => {
       const wrap = moreWrapRefs.current.get(moreOpenTaskId);
@@ -225,7 +204,7 @@ setDraftTasks(normalizeOrderIndex(base));
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [open, moreOpenTaskId]);
 
-  // 親ID -> 子の配列（表示/展開用）
+  // 親ID -> 子配列
   const childrenByParent = useMemo(() => {
     const byOrder = (a: Task, b: Task) => a.order_index - b.order_index;
     const map = new Map<ID, Task[]>();
@@ -250,7 +229,7 @@ setDraftTasks(normalizeOrderIndex(base));
 
   const hasChildren = (id: ID) => (childrenByParent.get(id)?.length ?? 0) > 0;
 
-  // ✅ 「表示する行」：再帰で全部
+  // 表示行
   const viewRows: ViewRow[] = useMemo(() => {
     const rows: ViewRow[] = [];
 
@@ -275,12 +254,12 @@ setDraftTasks(normalizeOrderIndex(base));
     return rows;
   }, [roots, childrenByParent, expandedIds]);
 
-    const rootCount = useMemo(
-      () => draftTasks.filter((t) => !t.parent_task_id).length,
-      [draftTasks]
-    );
+  const rootCount = useMemo(
+    () => draftTasks.filter((t) => !t.parent_task_id).length,
+    [draftTasks]
+  );
 
-  // ============ UI操作 ============
+  // ========= UI操作 =========
 
   const openDetail = (id: ID) => {
     const target = draftTasks.find((x) => x.id === id);
@@ -297,7 +276,6 @@ setDraftTasks(normalizeOrderIndex(base));
     setDetailTaskId(null);
   };
 
-
   const toggleExpand = (id: ID) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -305,6 +283,11 @@ setDraftTasks(normalizeOrderIndex(base));
       else next.add(id);
       return next;
     });
+  };
+
+  const updateProjectTitle = (title: string) => {
+    setDraftProject((prev) => ({ ...prev, title, updated_at: now() }));
+    if (submitTried) setProjectTitleError(title.trim() ? null : "入力してください");
   };
 
   const updateTaskTitle = (id: ID, title: string) => {
@@ -315,7 +298,7 @@ setDraftTasks(normalizeOrderIndex(base));
     if (!submitTried) return;
 
     const target = draftTasks.find((x) => x.id === id);
-    if (target?.parent_task_id) return; // rootだけ
+    if (target?.parent_task_id) return; // rootのみ必須にしたいならここ維持
 
     setTaskErrors((prev) => ({
       ...prev,
@@ -323,12 +306,7 @@ setDraftTasks(normalizeOrderIndex(base));
     }));
   };
 
-  const updateProjectName = (name: string) => {
-    setDraftProject((prev) => ({ ...prev, name, updated_at: now() }));
-    if (submitTried) setProjectNameError(name.trim() ? null : "入力してください");
-  };
-
-  // 追加：指定行の直後に、同じ親として追加
+  // 指定行の直後に同じ親で追加
   const addTaskAfter = (afterId: ID) => {
     setDraftTasks((prev) => {
       const idx = prev.findIndex((t) => t.id === afterId);
@@ -336,16 +314,12 @@ setDraftTasks(normalizeOrderIndex(base));
 
       const after = prev[idx];
       const next = [...prev];
-      next.splice(
-        idx + 1,
-        0,
-        createDraftTask(draftProject.id, "", after.parent_task_id ?? null)
-      );
+      next.splice(idx + 1, 0, createDraftTask(draftProject.id, "", after.parent_task_id ?? null));
       return normalizeOrderIndex(next);
     });
   };
 
-  // 削除：rootが1件未満にならない / 親を消したら子も消す
+  // 削除（親を消したら子も消す / rootは最低1件維持）
   const removeTask = (id: ID) => {
     setDraftTasks((prev) => {
       const toDelete = new Set<ID>();
@@ -360,7 +334,6 @@ setDraftTasks(normalizeOrderIndex(base));
       }
 
       const removed = prev.filter((t) => !toDelete.has(t.id));
-
       const nextRootCount = removed.filter((t) => !t.parent_task_id).length;
       if (nextRootCount < 1) return prev;
 
@@ -374,76 +347,71 @@ setDraftTasks(normalizeOrderIndex(base));
     });
   };
 
+  // プロジェクト化：親を is_group=true にして、子を1件作る（既に子があるなら何もしない）
   const projectizeTask = (id: ID) => {
-  setDraftTasks((prev) => {
-    const idx = prev.findIndex((t) => t.id === id);
-    if (idx < 0) return prev;
+    setDraftTasks((prev) => {
+      const idx = prev.findIndex((t) => t.id === id);
+      if (idx < 0) return prev;
 
-    const target = prev[idx];
+      const target = prev[idx];
 
-    // すでに子がいるなら「展開するだけ」でOK
-    const alreadyHasChild = prev.some((t) => t.parent_task_id === id);
-    if (alreadyHasChild) return prev;
+      // 既に子があるなら追加しない
+      const alreadyHasChild = prev.some((t) => t.parent_task_id === id);
+      if (alreadyHasChild) return prev;
 
-    const ts = now();
+      const ts = now();
+      const next = [...prev];
 
-    // 親タイトルに（親）を付けたい場合（動く優先の簡易）
-    const parentTitle =
-      (target.title ?? "").includes("（親）") ? target.title : `${target.title ?? ""}（親）`;
+      next[idx] = { ...target, is_group: true, updated_at: ts };
 
-    const next = [...prev];
+      const child = createDraftTask(draftProject.id, "", id);
+      next.splice(idx + 1, 0, child);
 
-    // 親を更新（（親）付けたい場合だけ）
-    next[idx] = { ...target, title: parentTitle, updated_at: ts };
+      return normalizeOrderIndex(next);
+    });
 
-    // 子を1枚作って、親の直後に差し込む
-    const child = createDraftTask(draftProject.id, "", id);
-    next.splice(idx + 1, 0, child);
+    setProjectizedIds((prev) => {
+      const n = new Set(prev);
+      n.add(id);
+      return n;
+    });
 
-    return normalizeOrderIndex(next);
-  });
+    setExpandedIds((prev) => {
+      const n = new Set(prev);
+      n.add(id);
+      return n;
+    });
+  };
 
-  // 親を展開する（子が見えるように）
-  setExpandedIds((old) => {
-    const n = new Set(old);
-    n.add(id);
-    return n;
-  });
-
-  // もし “moreメニュー開きっぱ” 状態があるなら閉じる
-  // setMoreOpenId(null);
-};
-
-  // 保存可能か（root入力済み1件以上）
+  // 保存可能条件
   const canSave = useMemo(() => {
-    const projectName = draftProject.name.trim();
-    if (!projectName) return false;
+    const projectTitle = draftProject.title.trim();
+    if (!projectTitle) return false;
 
     const filledRootCount = draftTasks
       .filter((t) => !t.parent_task_id)
-      .filter((t) => t.title.trim().length > 0).length;
+      .filter((t) => (t.title ?? "").trim().length > 0).length;
 
     return filledRootCount >= 1;
-  }, [draftProject.name, draftTasks]);
+  }, [draftProject.title, draftTasks]);
 
   const handleSave = () => {
     setSubmitTried(true);
 
-    const pName = draftProject.name.trim();
-    setProjectNameError(pName ? null : "入力してください");
-    if (!pName) return;
+    const pTitle = draftProject.title.trim();
+    setProjectTitleError(pTitle ? null : "入力してください");
+    if (!pTitle) return;
 
     const ts = now();
 
-    // ✅ まず Project を作る（projectToSave が今コード内に無いと後で死ぬ）
     const projectToSave: Project = {
       ...draftProject,
-      name: pName,
-      current_order_index: project ? (project.current_order_index ?? 0) : 0,
+      title: pTitle,
+      current_order_index: isEdit ? (project?.current_order_index ?? 0) : 0,
       updated_at: ts,
     };
 
-    // 1) title を trim
+    // 1) title trim
     const trimmedAll = draftTasks.map((t) => ({
       ...t,
       title: (t.title ?? "").trim(),
@@ -452,7 +420,7 @@ setDraftTasks(normalizeOrderIndex(base));
     // 2) 空タイトルは保存しない
     const nonEmpty = trimmedAll.filter((t) => t.title.length > 0);
 
-    // 3) 「保存される子の数」を親ごとにカウント
+    // 3) 保存される子数を親ごとに数える
     const savedChildCountByParent = new Map<ID, number>();
     for (const t of nonEmpty) {
       if (!t.parent_task_id) continue;
@@ -462,7 +430,7 @@ setDraftTasks(normalizeOrderIndex(base));
       );
     }
 
-    // 4) projectized なのに “保存される子が0” の親IDを収集
+    // 4) projectized なのに子が0の親は削除対象
     const removedParentIds = new Set<ID>();
     for (const t of nonEmpty) {
       const childCount = savedChildCountByParent.get(t.id) ?? 0;
@@ -471,18 +439,18 @@ setDraftTasks(normalizeOrderIndex(base));
       }
     }
 
-    // 5) 親が消えるなら、その配下も消す
+    // 5) 親が消えるならその配下も消す
     const cleaned = nonEmpty.filter((t) => {
       if (removedParentIds.has(t.id)) return false;
       if (t.parent_task_id && removedParentIds.has(t.parent_task_id)) return false;
       return true;
     });
 
-    // ✅ root が1件以上ないと保存しない（ここも cleaned 基準）
+    // rootが1件以上必要
     const cleanedRoots = cleaned.filter((t) => !t.parent_task_id);
     if (cleanedRoots.length < 1) return;
 
-    // ✅ rootエラー判定も cleaned 基準で作り直す（表示がズレない）
+    // rootのエラー判定
     const nextTaskErrors: Record<ID, string | null> = {};
     for (const t of cleaned) {
       if (t.parent_task_id) continue;
@@ -492,7 +460,7 @@ setDraftTasks(normalizeOrderIndex(base));
 
     const labelId = projectToSave.label_id ?? null;
 
-    // 6) 保存用 tasks
+    // 保存用 tasks
     const tasksToSave: Task[] = normalizeOrderIndex(
       cleaned.map((t) => ({
         ...t,
@@ -507,6 +475,8 @@ setDraftTasks(normalizeOrderIndex(base));
   };
 
   if (!open) return null;
+
+  const currentLabel = labels.find((l) => l.id === draftProject.label_id) ?? null;
 
   return (
     <div className={styles.backdrop} onClick={onClose} role="presentation">
@@ -527,24 +497,16 @@ setDraftTasks(normalizeOrderIndex(base));
                 className={styles.labelBtn}
                 onClick={() => setLabelOpen((v) => !v)}
               >
-                {(() => {
-                  const current = labels.find((l) => l.id === draftProject.label_id);
-
-                  return (
-                    <>
-                      <span
-                        className={styles.labelDot}
-                        style={{ background: current?.color ?? "#BDBDBD" }}
-                      />
-                      <span className={styles.labelBtnText}>
-                        {current ? current.name : "ラベルなし"}
-                      </span>
-                    </>
-                  );
-                })()}
-
+                <span
+                  className={styles.labelDot}
+                  style={{ background: currentLabel?.color ?? "#BDBDBD" }}
+                />
+                <span className={styles.labelBtnText}>
+                  {currentLabel ? currentLabel.title : "ラベルなし"}
+                </span>
                 <span className={styles.caret}>▼</span>
               </button>
+
               {labelOpen && (
                 <div className={styles.labelMenu}>
                   {labels.map((l) => (
@@ -565,11 +527,10 @@ setDraftTasks(normalizeOrderIndex(base));
                         className={styles.labelDot}
                         style={{ background: l.color ?? "#BDBDBD" }}
                       />
-                      {l.name}
+                      {l.title}
                     </button>
                   ))}
 
-                  {/* 解除（最小構成ならこれも便利） */}
                   <button
                     type="button"
                     className={styles.labelItem}
@@ -578,23 +539,17 @@ setDraftTasks(normalizeOrderIndex(base));
                       setLabelOpen(false);
                     }}
                   >
-                    （ラベルなし）
+                    ラベルなし
                   </button>
                 </div>
               )}
             </div>
 
-
             <div className={styles.topRight}>
               <button type="button" className={styles.iconBtn} aria-label="ピン">
                 📌
               </button>
-              <button
-                type="button"
-                className={styles.iconBtn}
-                aria-label="閉じる"
-                onClick={onClose}
-              >
+              <button type="button" className={styles.iconBtn} aria-label="閉じる" onClick={onClose}>
                 ✕
               </button>
             </div>
@@ -602,13 +557,13 @@ setDraftTasks(normalizeOrderIndex(base));
 
           {/* プロジェクト名 */}
           <div className={styles.projectNameRow}>
-              <input
-                className={styles.projectNameInput}
-                value={draftProject.name}
-                onChange={(e) => updateProjectName(e.target.value)}
-                placeholder={projectNameError ? "入力してください" : "プロジェクト名"}
-                data-error={projectNameError ? "1" : "0"}
-              />
+            <input
+              className={styles.projectNameInput}
+              value={draftProject.title}
+              onChange={(e) => updateProjectTitle(e.target.value)}
+              placeholder={projectTitleError ? "入力してください" : "プロジェクト名"}
+              data-error={projectTitleError ? "1" : "0"}
+            />
             <div className={styles.projectUnderline} />
           </div>
 
@@ -617,17 +572,17 @@ setDraftTasks(normalizeOrderIndex(base));
             <div className={styles.dot} data-pos="start" aria-hidden />
 
             <div className={styles.list}>
-              {viewRows.map(({ t, depth, hasChildren, isExpanded }) => (
+              {viewRows.map(({ t, depth, hasChildren: h, isExpanded }) => (
                 <div
                   key={t.id}
                   className={styles.item}
                   data-depth={String(depth)}
-                  data-parent={hasChildren ? "1" : "0"}
+                  data-parent={h ? "1" : "0"}
                   data-expanded={isExpanded ? "1" : "0"}
                 >
-                  {/* 左：展開アイコン */}
+                  {/* 左：展開 */}
                   <div className={styles.itemLeft}>
-                    {hasChildren ? (
+                    {h ? (
                       <button
                         type="button"
                         className={styles.expandBtn}
@@ -642,11 +597,11 @@ setDraftTasks(normalizeOrderIndex(base));
                     )}
                   </div>
 
-                  {/* 中央：入力 */}
+                  {/* 中央：カード */}
                   <div className={styles.taskCard} data-error={taskErrors[t.id] ? "1" : "0"}>
                     <input
                       className={styles.taskInput}
-                      value={t.title}
+                      value={t.title ?? ""}
                       onChange={(e) => updateTaskTitle(t.id, e.target.value)}
                       placeholder={taskErrors[t.id] ? "入力してください" : "タスク名"}
                       data-error={taskErrors[t.id] ? "1" : "0"}
@@ -682,7 +637,7 @@ setDraftTasks(normalizeOrderIndex(base));
                             onClick={(e) => {
                               e.stopPropagation();
                               setMoreOpenTaskId(null);
-                              openDetail(t.id); // ← 今まで通り「タスク詳細」
+                              openDetail(t.id);
                             }}
                           >
                             タスク詳細
@@ -691,26 +646,14 @@ setDraftTasks(normalizeOrderIndex(base));
                           <button
                             type="button"
                             className={styles.moreItem}
-                            onClick={() => {
-                              const parentId = projectizeTask(t.id) ?? t.id;
-                              setProjectizedIds((prev) => {
-                                const next = new Set(prev);
-                                next.add(parentId);                     
-                                return next;
-                              })
-
-                              setExpandedIds((prev) => {
-                                const next = new Set(prev);
-                                next.add(parentId);
-                                return next;
-                              });
-
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              projectizeTask(t.id);
                               setMoreOpenTaskId(null);
                             }}
                           >
                             プロジェクト化
                           </button>
-
                         </div>
                       )}
                     </div>
@@ -741,35 +684,33 @@ setDraftTasks(normalizeOrderIndex(base));
 
             <div className={styles.dot} data-pos="end" aria-hidden />
           </div>
-          <div className={styles.footer}>
 
-            {/* 左下：削除（編集モードだけ） */}
-          {isEdit && onDelete && (
-            <button
-              type="button"
-              className={styles.deleteProjectBtn}
-              onClick={() => setConfirmOpen(true)}
-            >
-              削除
-            </button>
-          )}
+          {/* フッター */}
+          <div className={styles.footer}>
+            {isEdit && onDelete && (
+              <button
+                type="button"
+                className={styles.deleteProjectBtn}
+                onClick={() => setConfirmOpen(true)}
+              >
+                削除
+              </button>
+            )}
 
             <button
               type="button"
               className={styles.saveBtn}
               onClick={handleSave}
-              data-disabled={!canSave ? "1" : "0"} // 見た目用
+              data-disabled={!canSave ? "1" : "0"}
             >
               保存
             </button>
           </div>
         </div>
+
+        {/* 詳細モーダル */}
         {detailOpen && detailTaskId && (
-          <div
-            className={styles.detailBackdrop}
-            role="presentation"
-            onClick={closeDetail}
-          >
+          <div className={styles.detailBackdrop} role="presentation" onClick={closeDetail}>
             <div
               className={styles.detailModal}
               role="dialog"
@@ -777,7 +718,6 @@ setDraftTasks(normalizeOrderIndex(base));
               aria-label="タスク編集"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* 上部（×だけ） */}
               <div className={styles.detailTopRow}>
                 <button
                   type="button"
@@ -789,7 +729,6 @@ setDraftTasks(normalizeOrderIndex(base));
                 </button>
               </div>
 
-              {/* タイトル */}
               <div className={styles.detailTitleWrap}>
                 <input
                   className={styles.detailTitleInput}
@@ -799,7 +738,6 @@ setDraftTasks(normalizeOrderIndex(base));
                 />
               </div>
 
-              {/* メモ */}
               <div className={styles.detailMemoWrap}>
                 <div className={styles.detailMemoLabel}>メモ</div>
                 <textarea
@@ -810,16 +748,14 @@ setDraftTasks(normalizeOrderIndex(base));
                 />
               </div>
 
-              {/* 操作（保存だけ） */}
               <div className={styles.detailActions}>
                 <button
                   type="button"
                   className={styles.detailDeleteBtn}
                   onClick={() => {
-                    if (!detailTaskId) return;
-                    const id = detailTaskId; // 退避（重要）
-                    closeDetail();           // 先に閉じてもOK
-                    removeTask(id);          // 「－」と同じ処理を呼ぶ
+                    const id = detailTaskId;
+                    closeDetail();
+                    removeTask(id);
                   }}
                 >
                   削除
@@ -829,7 +765,6 @@ setDraftTasks(normalizeOrderIndex(base));
                   type="button"
                   className={styles.detailSaveBtn}
                   onClick={() => {
-                    // 保存 → draftTasks に反映（今のままでOK）
                     setDraftTasks((prev) =>
                       prev.map((t) =>
                         t.id === detailTaskId
@@ -864,50 +799,50 @@ setDraftTasks(normalizeOrderIndex(base));
           </div>
         )}
 
+        {/* 削除確認 */}
         {confirmOpen && (
-        <div
-          className={styles.confirmBackdrop}
-          role="presentation"
-          onClick={() => setConfirmOpen(false)}
-        >
           <div
-            className={styles.confirmModal}
-            role="dialog"
-            aria-modal="true"
-            aria-label="削除確認"
-            onClick={(e) => e.stopPropagation()}
+            className={styles.confirmBackdrop}
+            role="presentation"
+            onClick={() => setConfirmOpen(false)}
           >
-            <div className={styles.confirmTitle}>本当に削除しますか？</div>
-            <div className={styles.confirmText}>
-              このプロジェクトと、プロジェクト内のタスクをすべて削除します。
-            </div>
+            <div
+              className={styles.confirmModal}
+              role="dialog"
+              aria-modal="true"
+              aria-label="削除確認"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={styles.confirmTitle}>本当に削除しますか？</div>
+              <div className={styles.confirmText}>
+                このプロジェクトと、配下のタスクをすべて削除します。
+              </div>
 
-            <div className={styles.confirmActions}>
-              <button
-                type="button"
-                className={styles.confirmCancel}
-                onClick={() => setConfirmOpen(false)}
-              >
-                キャンセル
-              </button>
+              <div className={styles.confirmActions}>
+                <button
+                  type="button"
+                  className={styles.confirmCancel}
+                  onClick={() => setConfirmOpen(false)}
+                >
+                  キャンセル
+                </button>
 
-              <button
-                type="button"
-                className={styles.confirmDelete}
-                onClick={() => {
-                  if (!project) return;
-                  onDelete?.(project.id);
-                  setConfirmOpen(false);
-                  onClose(); // ProjectModal自体も閉じる
-                }}
-              >
-                削除する
-              </button>
+                <button
+                  type="button"
+                  className={styles.confirmDelete}
+                  onClick={() => {
+                    if (!project) return;
+                    onDelete?.(project.id);
+                    setConfirmOpen(false);
+                    onClose();
+                  }}
+                >
+                  削除する
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
+        )}
       </div>
     </div>
   );

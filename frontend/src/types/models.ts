@@ -2,75 +2,75 @@
 
 /**
  * =========================
- * Growth Road / DB前提モデル（フロント用）
+ * Growth Road / DB前提モチE���E�フロント用�E�E
  * =========================
  *
- * ▼ここまでの設計の要点（超まとめ）
- * 1) DBは labels / projects / tasks の3テーブル想定。
- * 2) タスクは project_id / label_id / parent_task_id を NULL 許容。
- * 3) 総合画面（Dashboard）の表示ルールは2種類：
- *    - project_id があるタスク：各プロジェクトで「今の1件だけ」を表示して進めていく
- *    - project_id が NULL のタスク：単体タスク扱いで、未完了は “全部表示” する
+ * ▼ここまでの設計�E要点�E�趁E��とめE��E
+ * 1) DBは labels / projects / tasks の3チE�Eブル想定、E
+ * 2) タスクは project_id / label_id / parent_task_id めENULL 許容、E
+ * 3) 総合画面�E�Eashboard�E��E表示ルールは2種類！E
+ *    - project_id があるタスク�E�各プロジェクトで「今�E1件だけ」を表示して進めてぁE��
+ *    - project_id ぁENULL のタスク�E�単体タスク扱ぁE��、未完亁E�E “�E部表示 Eする
  *
- * 4) 「子タスクを持つ親タスク」は “プロジェクト化” できる。
- *    例）学習プロジェクト内に 1,2,3,4 があり、2が子(11,12,13,14)を持つ場合、
- *        parent_task_id を使って階層を表現する（11..の parent_task_id = 2）。
+ * 4) 「子タスクを持つ親タスク」�E “�Eロジェクト化 Eできる、E
+ *    例）学習�Eロジェクト�Eに 1,2,3,4 があり、Eが孁E11,12,13,14)を持つ場合、E
+ *        parent_task_id を使って階層を表現する�E�E1..の parent_task_id = 2�E�、E
  *
- * 5) 表示順は「平坦化(Flatten)」で決める想定。
- *    ルートの順番は order_index で 1 → 2 → 3 → 4。
- *    ただし “子を持つ親(2)” は表示せず、その位置に子(11..14)を差し込む。
- *    → 表示順：1, 11, 12, 13, 14, 3, 4
+ * 5) 表示頁E�E「平坦匁EFlatten)」で決める想定、E
+ *    ルート�E頁E��は order_index で 1 ↁE2 ↁE3 ↁE4、E
+ *    ただぁE“子を持つ親(2) Eは表示せず、その位置に孁E11..14)を差し込む、E
+ *    ↁE表示頁E��E, 11, 12, 13, 14, 3, 4
  *
- * 6) order_index は「同一(project_id, parent_task_id)内」で 0..n-1 を維持する前提。
- *    タスク追加/削除/順番変更時には、必ず整形(再採番)関数を通して
- *    欠番・重複が絶対起きないようにする。
+ * 6) order_index は「同一(project_id, parent_task_id)冁E��で 0..n-1 を維持する前提、E
+ *    タスク追加/削除/頁E��変更時には、忁E��整形(再採番)関数を通して
+ *    欠番・重褁E��絶対起きなぁE��ぁE��する、E
  *
- * 7) 進捗の持ち方について（現在の方針）
- *    - 現状は Project に current_order_index を持つ(A案)。
- *      ※将来的に階層の進行まで確実に扱うなら current_task_id 方式の方が強い。
- *      ただし現段階では A案で進める。
+ * 7) 進捗�E持ち方につぁE���E�現在の方針！E
+ *    - 現状は Project に current_order_index を持つ(A桁E、E
+ *      ※封E��皁E��階層の進行まで確実に扱ぁE��めEcurrent_task_id 方式�E方が強ぁE��E
+ *      ただし現段階では A案で進める、E
  */
 
 /**
- * IDは将来DBでは UUID を想定。
- * フロントでは string に統一しておくと、後でAPI導入しても崩れにくい。
+ * IDは封E��DBでは UUID を想定、E
+ * フロントでは string に統一しておくと、後でAPI導�Eしても崩れにくい、E
  */
 export type ID = string;
 
 /**
- * ラベル（任意）
- * - project / task どちらにも紐づけ可能（NULL許容）
- * - color/icon はUI用。未設定でもOK。
+ * ラベル�E�任意！E
+ * - project / task どちらにも紐づけ可能�E�EULL許容�E�E
+ * - color/icon はUI用。未設定でもOK、E
  */
 export type Label = {
   id: ID;
-  name: string;
-  color?: string | null;
-  created_at: string; // ISO文字列（例: new Date().toISOString()）
+  title: string;
+  color: string | null;
+  created_at: string; // ISO斁E���E�E�侁E new Date().toISOString()�E�E
 };
 
 /**
- * プロジェクト
- * - label_id はプロジェクト全体の色/カテゴリに使う（任意）
- * - current_order_index は「今表示したいタスクの order_index」を表す(A案)
+ * プロジェクチE
+ * - label_id はプロジェクト�E体�E色/カチE��リに使ぁE��任意！E
+ * - current_order_index は「今表示したぁE��スクの order_index」を表ぁEA桁E
  *
- * 例）ルート階層の表示を進める場合：
- *   current_order_index = 0 → order_index=0 のタスクを表示
- *   current_order_index = 1 → order_index=1 のタスクを表示
+ * 例）ルート階層の表示を進める場合！E
+ *   current_order_index = 0 ↁEorder_index=0 のタスクを表示
+ *   current_order_index = 1 ↁEorder_index=1 のタスクを表示
  *
- * ※注意：
- *   2のような「子を持つタスク」をどう進めるか（子へ潜る/スキップして次へなど）は
- *   今後ロジックで決める。将来は current_task_id 方式に寄せる可能性あり。
+ * ※注意！E
+ *   2のような「子を持つタスク」をどぁE��めるか（子へ潜る/スキチE�Eして次へなど�E��E
+ *   今後ロジチE��で決める。封E��は current_task_id 方式に寁E��る可能性あり、E
  */
 export type Project = {
   id: ID;
-  name: string;
+  title: string;
   label_id?: ID | null;
 
   /**
-   * このプロジェクトで「現在表示する段階」
-   * - completed したら +1 する想定（まずはシンプルに）
-   * - tasks 側の order_index は 0..n-1 を維持する前提（欠番/重複を作らない）
+   * こ�Eプロジェクトで「現在表示する段階、E
+   * - completed しためE+1 する想定（まず�Eシンプルに�E�E
+   * - tasks 側の order_index は 0..n-1 を維持する前提（欠番/重褁E��作らなぁE��E
    */
   current_order_index: number;
 
@@ -81,28 +81,28 @@ export type Project = {
 /**
  * タスク
  *
- * ✅ 重要仕様（このモデルを読んだだけで迷わないための説明）
+ * ✁E重要仕様（このモチE��を読んだだけで迷わなぁE��め�E説明！E
  *
- * 1) project_id が NULL のタスクは「単体タスク」扱い。
- *    → 総合画面では、未完了なら “全部表示” する（プロジェクト進行の対象外）。
+ * 1) project_id ぁENULL のタスクは「単体タスク」扱ぁE��E
+ *    ↁE総合画面では、未完亁E��めE“�E部表示 Eする�E��Eロジェクト進行�E対象外）、E
  *
- * 2) parent_task_id は「サブプロジェクト」を表すための親参照。
- *    例）学習プロジェクト内に 1,2,3,4 があり、2が子(11,12,13,14)を持つ：
+ * 2) parent_task_id は「サブ�Eロジェクト」を表すため�E親参�E、E
+ *    例）学習�Eロジェクト�Eに 1,2,3,4 があり、Eが孁E11,12,13,14)を持つ�E�E
  *        - 11/12/13/14 の parent_task_id = 2
- *        - これで「2の中に11..がある」を表現できる
+ *        - これで、Eの中に11..がある」を表現できる
  *
- * 3) order_index は “同一(project_id, parent_task_id)内” の並び順。
- *    - ルート階層：parent_task_id=null の中で 0..n-1
- *    - 子階層：parent_task_id=2 の中で 0..n-1（11..14の並び）
+ * 3) order_index は “同一(project_id, parent_task_id)冁E��Eの並び頁E��E
+ *    - ルート階層�E�parent_task_id=null の中で 0..n-1
+ *    - 子階層�E�parent_task_id=2 の中で 0..n-1�E�E1..14の並び�E�E
  *
- * 4) 表示順（平坦化）の基本方針：
- *    - ルートの順番は order_index 順
- *    - 子を持つ親タスクは「親を表示せず、子をその位置に差し込む」
- *      例）1,2,3,4 で 2 が子を持つ → 1,11,12,13,14,3,4
+ * 4) 表示頁E��平坦化）�E基本方針！E
+ *    - ルート�E頁E��は order_index 頁E
+ *    - 子を持つ親タスクは「親を表示せず、子をそ�E位置に差し込む、E
+ *      例！E,2,3,4 で 2 が子を持つ ↁE1,11,12,13,14,3,4
  *
- * 5) 欠番・重複対策：
- *    タスク追加/削除/順番変更後は、必ず再採番（normalize）して
- *    同一グループ内の order_index を 0..n-1 に整える。
+ * 5) 欠番・重褁E��策！E
+ *    タスク追加/削除/頁E��変更後�E、忁E��再採番�E�Eormalize�E�して
+ *    同一グループ�Eの order_index めE0..n-1 に整える、E
  */
 export type Task = {
   id: ID;
@@ -111,7 +111,7 @@ export type Task = {
   label_id?: ID | null;
   parent_task_id?: ID | null;
 
-  // ★追加：親（グループ）用タスク。カードには出さない
+  // ☁E��加�E�親�E�グループ）用タスク。カードには出さなぁE
   is_group?: boolean;
 
   order_index: number;

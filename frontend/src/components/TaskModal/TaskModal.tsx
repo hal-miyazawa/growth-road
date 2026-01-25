@@ -7,12 +7,12 @@ type Props = {
   onClose: () => void;
   onSave: (task: Task) => void;
 
-  // ★編集時のみ使う（渡さなければ削除ボタン出ない）
+  // 編集のみ。渡さなければ削除ボタン出ない
   onDelete?: (id: ID) => void;
 
   labels: Label[];
 
-  // ★編集対象。null/undefined なら新規作成
+  // 編集対象。null/undefined なら新規作成
   task?: Task | null;
 };
 
@@ -32,7 +32,7 @@ export default function TaskModal({
 }: Props) {
   const isEdit = !!task;
 
-  // mounted: closeアニメ中もDOMを残すためのフラグ
+  // mounted: closeアニメ中もDOMを残す
   const [mounted, setMounted] = useState(open);
   const [phase, setPhase] = useState<Phase>("open");
 
@@ -59,6 +59,7 @@ export default function TaskModal({
     }
   }, [open, task]);
 
+  // ラベルメニューの外クリックで閉じる
   useEffect(() => {
     if (!open) return;
     if (!labelOpen) return;
@@ -103,15 +104,12 @@ export default function TaskModal({
 
   if (!mounted) return null;
 
-  
-
   // 保存
   const handleSave = () => {
     const ts = now();
     const t = title.trim() || "タスク";
     const m = memo.trim() || null;
 
-    // ★編集なら既存taskをベースに更新（project_id等を壊さない）
     const next: Task = task
       ? {
           ...task,
@@ -122,7 +120,7 @@ export default function TaskModal({
         }
       : {
           id: uid() as ID,
-          project_id: null, // 新規は単体タスク（今まで通り）
+          project_id: null, // 新規は単体タスク
           label_id: selectedLabelId,
           parent_task_id: null,
           order_index: 0, // Dashboard側で付け替えOK
@@ -131,6 +129,7 @@ export default function TaskModal({
           completed: false,
           completed_at: null,
           is_fixed: false,
+          is_group: false,
           created_at: ts,
           updated_at: ts,
         };
@@ -175,7 +174,7 @@ export default function TaskModal({
                       style={{ background: current?.color ?? "#BDBDBD" }}
                     />
                     <span className={styles.labelBtnText}>
-                      {current ? current.name : "ラベルなし"}
+                      {current ? current.title : "ラベルなし"}
                     </span>
                   </>
                 );
@@ -199,7 +198,7 @@ export default function TaskModal({
                       className={styles.labelDot}
                       style={{ background: l.color ?? "#BDBDBD" }}
                     />
-                    {l.name}
+                    {l.title}
                   </button>
                 ))}
 
@@ -211,13 +210,14 @@ export default function TaskModal({
                     setLabelOpen(false);
                   }}
                 >
-                  （ラベルなし）
+                  ラベルなし
                 </button>
               </div>
             )}
           </div>
+
           <div className={styles.topRight}>
-            {/* ピンはまだ未実装ならこのままでOK */}
+            {/* ピンは未実装ならこのままでOK */}
             <button type="button" className={styles.iconBtn} aria-label="ピン">
               📌
             </button>
