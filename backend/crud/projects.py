@@ -93,7 +93,7 @@ def upsert_project_tasks(db: Session, project_id: str, payloads: list[TaskUpsert
             obj = existing.get(item.id)
             if not obj:
                 other = db.query(Task).filter(Task.id == item.id).first()
-                if other and other.project_id != project_id:
+                if other and other.project_id is not None and other.project_id != project_id:
                     return "id_conflict", None
                 obj = other if other else Task(id=item.id)
                 if not other:
