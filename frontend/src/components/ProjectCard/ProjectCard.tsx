@@ -1,4 +1,4 @@
-import type { KeyboardEventHandler } from "react";
+import type { KeyboardEventHandler, ReactNode } from "react";
 import styles from "./ProjectCard.module.scss";
 
 type Props = {
@@ -6,6 +6,8 @@ type Props = {
   projectName: string;
   color?: string;
   pinned?: boolean;
+  mode?: "default" | "history";
+  topRightSlot?: ReactNode;
   onClick?: () => void;
 
   onTogglePin?: () => void;
@@ -25,12 +27,15 @@ export default function ProjectCard({
   projectName,
   color = "#bdbdbd",
   pinned = false,
+  mode = "default",
+  topRightSlot,
   onClick,
   onTogglePin,
   onComplete,
   onClickProjectName, // ★追加
   onConvertToProject,
 }: Props) {
+  const isHistory = mode === "history";
   const handleKeyDown: KeyboardEventHandler<HTMLDivElement> = (e) => {
     if (!onClick) return;
     if (e.key === "Enter" || e.key === " ") {
@@ -42,12 +47,12 @@ export default function ProjectCard({
   return (
     <div
       className={styles.card}
-      role="button"
-      tabIndex={0}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : -1}
       onClick={onClick}
       onKeyDown={handleKeyDown}
     >
-    <div className={styles.top} style={{ backgroundColor: color }}>
+      <div className={styles.top} style={{ backgroundColor: color }}>
       {/* 左上：projectNameがある→編集、ない→＋ */}
       {projectName ? (
         <button
@@ -75,33 +80,41 @@ export default function ProjectCard({
         </button>
       )}
 
-      <button
-        type="button"
-        className={styles.pinBtn}
-        aria-label="ピン"
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePin?.();
-        }}
-        data-active={pinned ? "1" : "0"}
-      >
-        <PinIcon />
-      </button>
+      {topRightSlot ? (
+        <div className={styles.topRightSlot}>{topRightSlot}</div>
+      ) : (
+        !isHistory && (
+          <button
+            type="button"
+            className={styles.pinBtn}
+            aria-label="ピン"
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin?.();
+            }}
+            data-active={pinned ? "1" : "0"}
+          >
+            <PinIcon />
+          </button>
+        )
+      )}
     </div>
 
       <div className={styles.title}>{title}</div>
 
-      <button
-        type="button"
-        className={styles.bottomRightBtn}
-        aria-label="完了"
-        onClick={(e) => {
+      {!isHistory && (
+        <button
+          type="button"
+          className={styles.bottomRightBtn}
+          aria-label="完了"
+          onClick={(e) => {
           e.stopPropagation();
           onComplete?.();
-        }}
-      >
-        <CheckIcon />
-      </button>
+          }}
+          >
+          <CheckIcon />
+        </button>
+      )}
     </div>
   );
 }

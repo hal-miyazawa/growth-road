@@ -57,6 +57,7 @@
 
 .card:hover .topLeft,
 .card:hover .pinBtn,
+.card:hover .topRightSlot,
 .card:hover .bottomRightBtn {
   opacity: 1;
 }
@@ -119,6 +120,14 @@
   &:hover {
     transform: scale(1.12);
   }
+}
+
+.topRightSlot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 120ms ease;
 }
 
 /* pinned=true の時だけ少し濃く（任意） */

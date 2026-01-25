@@ -52,10 +52,96 @@
     }
   }
 
+  .analysisBtn {
+    width: auto;
+    height: 35px;
+    padding: 0 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    background: #fdfafa;
+    margin-left: 12px;
+    margin-top: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .select {
     height: 32px;
     width: 130px;
     padding: 0 8px;
-    margin-right: 20px;
+    margin-right: 10px;
   }
+}
+
+
+.userMenuWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.userBtn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px; /* iconBtnに合わせて調整 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+.userBtn:hover {
+  background: rgba(0, 0, 0, 0.06); /* hoverもiconBtnに合わせて調整 */
+}
+
+.userMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+  padding: 6px;
+  z-index: 50;
+}
+
+.userMenuItem {
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+
+  &:hover {
+    background: rgba(0,0,0,0.06);
+  }
+}
+
+.danger {
+  color: #b91c1c;
+
+  &:hover {
+    background: rgba(185, 28, 28, 0.08);
+  }
+}
+
+
+.userBtn {
+  border-radius: 999px;
+}
+
+.userDot {
+  width: 20px;
+  height: 20px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: #111; /* 黒丸 */
+  display: inline-block;
 }

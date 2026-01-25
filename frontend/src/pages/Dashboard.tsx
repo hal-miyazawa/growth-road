@@ -9,6 +9,8 @@ import ProjectModal from "../components/ProjectModal/ProjectModal";
 import { LabelRenameContext } from "../components/Sidebar/Sidebar";
 import type { ID, Label, Project, Task } from "../types/models";
 
+type SortKey = "created_at" | "updated_at";
+
 const now = () => new Date().toISOString();
 
 const legacyLabelNameById: Record<string, string> = {};
@@ -95,6 +97,9 @@ export default function Dashboard() {
   const [projectOpen, setProjectOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<ID | null>(null);
   const [selectedLabelId, setSelectedLabelId] = useState<ID | null>(null);
+  const [viewMode, setViewMode] = useState<"active" | "history">("active");
+  const [historyMenuOpenId, setHistoryMenuOpenId] = useState<ID | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("updated_at");
   const [convertSoloTaskId, setConvertSoloTaskId] = useState<ID | null>(null);
   const [convertSoloTaskTitle, setConvertSoloTaskTitle] = useState("");
   const [convertSoloTaskMemo, setConvertSoloTaskMemo] = useState<string | null>(null);
@@ -123,6 +128,12 @@ export default function Dashboard() {
     }
     return map;
   }, [projects, tasks]);
+
+  const handleSelectLabel = (id: ID | null) => {
+    setSelectedLabelId(id);
+    setViewMode("active");
+    setHistoryMenuOpenId(null);
+  };
 
   const handleAddLabel = async (title: string, color: string | null) => {
     const trimmed = title.trim();
@@ -315,6 +326,61 @@ export default function Dashboard() {
     });
   }, [cards, selectedLabelId, taskById]);
 
+  const sortedCards = useMemo(() => {
+    const getTime = (taskId?: ID | null) => {
+      if (!taskId) return 0;
+      const task = taskById.get(taskId);
+      if (!task) return 0;
+      const value = sortKey === "created_at" ? task.created_at : task.updated_at;
+      if (!value) return 0;
+      const time = new Date(value).getTime();
+      return Number.isNaN(time) ? 0 : time;
+    };
+
+    return [...filteredCards].sort((a, b) => getTime(b.taskId) - getTime(a.taskId));
+  }, [filteredCards, sortKey, taskById]);
+
+  const historyCards = useMemo(() => {
+    const labelById = new Map(labels.map((l) => [l.id, l]));
+    const projectById = new Map(projects.map((p) => [p.id, p]));
+
+    const toTime = (value?: string | null) => {
+      if (!value) return Number.NEGATIVE_INFINITY;
+      const time = new Date(value).getTime();
+      return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
+    };
+
+    return tasks
+      .filter((t) => t.completed)
+      .sort((a, b) => toTime(b.completed_at) - toTime(a.completed_at))
+      .map((t) => {
+        const label = t.label_id ? labelById.get(t.label_id) : null;
+        const project = t.project_id ? projectById.get(t.project_id) : null;
+
+        return {
+          id: t.id,
+          title: t.title,
+          projectName: project?.title ?? "ソロ",
+          color: label?.color ?? "#BDBDBD",
+          pinned: t.is_fixed ?? false,
+        };
+      });
+  }, [tasks, labels, projects]);
+
+  useEffect(() => {
+    if (!historyMenuOpenId) return;
+
+    const onDown = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el) return;
+      if (el.closest('[data-history-menu="true"]')) return;
+      setHistoryMenuOpenId(null);
+    };
+
+    window.addEventListener("mousedown", onDown, true);
+    return () => window.removeEventListener("mousedown", onDown, true);
+  }, [historyMenuOpenId]);
+
   // ピン留め切り替え（保存はまだ行わない）
   const togglePin = (taskId: ID) => {
     setTasks((prev) =>
@@ -322,6 +388,46 @@ export default function Dashboard() {
         t.id === taskId ? { ...t, is_fixed: !t.is_fixed, updated_at: now() } : t
       )
     );
+  };
+
+  const handleRestoreHistoryTask = async (taskId: ID) => {
+    try {
+      const updated = await apiPatch<Task>(`/api/tasks/${taskId}`, {
+        completed: false,
+        completed_at: null,
+      });
+
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setHistoryMenuOpenId(null);
+
+      if (updated.project_id) {
+        const flat = flatIdsByProject.get(updated.project_id) ?? [];
+        const restoredIndex = flat.indexOf(updated.id);
+        if (restoredIndex !== -1) {
+          setProjects((prev) =>
+            prev.map((p) => {
+              if (p.id !== updated.project_id) return p;
+              const nextIndex = Math.min(p.current_order_index, restoredIndex);
+              return nextIndex === p.current_order_index
+                ? p
+                : { ...p, current_order_index: nextIndex, updated_at: now() };
+            })
+          );
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteHistoryTask = async (taskId: ID) => {
+    try {
+      await apiDelete(`/api/tasks/${taskId}`);
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      setHistoryMenuOpenId(null);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const editingProject = useMemo(() => {
@@ -341,31 +447,35 @@ export default function Dashboard() {
   // 完了処理：
   // - task.completed=true
   // - projectカードの場合は project.current_order_index を進める（+1）
-  const completeTask = (card: (typeof cards)[number]) => {
+  const completeTask = async (card: (typeof cards)[number]) => {
     if (!card.taskId) return;
 
-    // 1) タスク完了
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === card.taskId
-          ? { ...t, completed: true, completed_at: now(), updated_at: now() }
-          : t
-      )
-    );
+    const ts = now();
+    try {
+      const updated = await apiPatch<Task>(`/api/tasks/${card.taskId}`, {
+        completed: true,
+        completed_at: ts,
+      });
 
-    // 2) プロジェクトのcurrent_order_indexを進める
-    if (card.kind === "project") {
-      setProjects((prev) =>
-        prev.map((p) => {
-          if (p.id !== card.projectId) return p;
+      // 1) タスク完了
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
 
-          return {
-            ...p,
-            current_order_index: p.current_order_index + 1,
-            updated_at: now(),
-          };
-        })
-      );
+      // 2) プロジェクトのcurrent_order_indexを進める
+      if (card.kind === "project") {
+        setProjects((prev) =>
+          prev.map((p) => {
+            if (p.id !== card.projectId) return p;
+
+            return {
+              ...p,
+              current_order_index: p.current_order_index + 1,
+              updated_at: now(),
+            };
+          })
+        );
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -374,45 +484,107 @@ export default function Dashboard() {
       <AppLayout
         labels={labels}
         selectedLabelId={selectedLabelId}
-        onSelectLabel={setSelectedLabelId}
+        onSelectLabel={handleSelectLabel}
         onAddLabel={handleAddLabel}
         onUpdateLabelColor={handleUpdateLabelColor}
         onDeleteLabel={handleDeleteLabel}
+        sortKey={sortKey}
+        onSortChange={setSortKey}
+        onOpenHistory={() => {
+          setHistoryMenuOpenId(null);
+          setViewMode("history");
+        }}
       >
         <div className={styles.page}>
           <div className={styles.grid}>
-            {filteredCards.map((c) => (
-              <ProjectCard
-                key={c.id}
-                title={c.title}
-                projectName={c.kind === "solo" ? "" : c.projectName}
-                color={c.color}
-                pinned={c.pinned}
-                onTogglePin={() => c.taskId && togglePin(c.taskId)}
-                onComplete={() => completeTask(c)}
-                // ソロタスクをプロジェクトに変換する
-                onConvertToProject={
-                  c.kind === "solo"
-                    ? () =>
-                        openProjectFromSoloTask(
-                          tasks.find((t) => t.id === c.taskId)!
-                        )
-                    : undefined
-                }
-                onClick={() => {
-                  setEditingTaskId(c.taskId);
-                  setTaskOpen(true);
-                }}
-                onClickProjectName={
-                  c.kind === "project"
-                    ? () => {
-                        setEditingProjectId(c.projectId);
-                        setProjectOpen(true);
-                      }
-                    : undefined
-                }
-              />
-            ))}
+            {viewMode === "history"
+              ? historyCards.map((c) => (
+                  <ProjectCard
+                    key={c.id}
+                    title={c.title}
+                    projectName={c.projectName}
+                    color={c.color}
+                    pinned={c.pinned}
+                    mode="history"
+                    topRightSlot={
+                      <div
+                        className={styles.historyMenuWrap}
+                        data-history-menu="true"
+                      >
+                        <button
+                          type="button"
+                          className={styles.historyMenuBtn}
+                          aria-label="履歴メニュー"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setHistoryMenuOpenId((prev) =>
+                              prev === c.id ? null : c.id
+                            );
+                          }}
+                        >
+                          ⋮
+                        </button>
+                        {historyMenuOpenId === c.id && (
+                          <div className={styles.historyMenuList}>
+                            <button
+                              type="button"
+                              className={styles.historyMenuItem}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleRestoreHistoryTask(c.id);
+                              }}
+                            >
+                              復元
+                            </button>
+                            <button
+                              type="button"
+                              className={
+                                `${styles.historyMenuItem} ${styles.historyMenuDanger}`
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleDeleteHistoryTask(c.id);
+                              }}
+                            >
+                              削除
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    }
+                  />
+                ))
+              : sortedCards.map((c) => (
+                  <ProjectCard
+                    key={c.id}
+                    title={c.title}
+                    projectName={c.kind === "solo" ? "" : c.projectName}
+                    color={c.color}
+                    pinned={c.pinned}
+                    onTogglePin={() => c.taskId && togglePin(c.taskId)}
+                    onComplete={() => completeTask(c)}
+                    onConvertToProject={
+                      c.kind === "solo"
+                        ? () =>
+                            openProjectFromSoloTask(
+                              tasks.find((t) => t.id === c.taskId)!
+                            )
+                        : undefined
+                    }
+                    onClick={() => {
+                      setEditingTaskId(c.taskId);
+                      setTaskOpen(true);
+                    }}
+                    onClickProjectName={
+                      c.kind === "project"
+                        ? () => {
+                            setEditingProjectId(c.projectId);
+                            setProjectOpen(true);
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
           </div>
         </div>
 
@@ -646,6 +818,7 @@ export default function Dashboard() {
             setConvertSoloLabelId(null);
           }}
         />
+
       </AppLayout>
     </LabelRenameContext.Provider>
   );
