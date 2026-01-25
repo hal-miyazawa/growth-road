@@ -264,27 +264,54 @@ export default function Dashboard() {
   // 初回ロード
   useEffect(() => {
     (async () => {
-      const serverLabels = await apiGet<Label[]>("/api/labels");
-      setLabels(serverLabels);
+      let serverLabels: Label[] = [];
+      try {
+        serverLabels = await apiGet<Label[]>("/api/labels");
+        setLabels(serverLabels);
+      } catch (e) {
+        console.error(e);
+      }
 
-      // 旧label_id（label-study等）を、サーバーのlabel.idに付け替える
+      let serverProjects: Project[] | null = null;
+      try {
+        serverProjects = await apiGet<Project[]>("/api/projects");
+      } catch (e) {
+        console.error(e);
+      }
+
+      let serverTasks: Task[] | null = null;
+      try {
+        serverTasks = await apiGet<Task[]>("/api/tasks");
+      } catch (e) {
+        console.error(e);
+      }
+
+      // ?label_id?label-study?????????label.id??????
       const titleToId = new Map(serverLabels.map((l) => [l.title.trim(), l.id]));
 
-      setProjects((prev) =>
-        prev.map((p) => {
-          const legacyName = p.label_id ? legacyLabelNameById[p.label_id] : null;
-          const newId = legacyName ? titleToId.get(legacyName) : null;
-          return newId ? { ...p, label_id: newId } : p;
-        })
-      );
+      if (serverProjects) {
+        const nextProjects =
+          titleToId.size === 0
+            ? serverProjects
+            : serverProjects.map((p) => {
+                const legacyName = p.label_id ? legacyLabelNameById[p.label_id] : null;
+                const newId = legacyName ? titleToId.get(legacyName) : null;
+                return newId ? { ...p, label_id: newId } : p;
+              });
+        setProjects(nextProjects);
+      }
 
-      setTasks((prev) =>
-        prev.map((t) => {
-          const legacyName = t.label_id ? legacyLabelNameById[t.label_id] : null;
-          const newId = legacyName ? titleToId.get(legacyName) : null;
-          return newId ? { ...t, label_id: newId } : t;
-        })
-      );
+      if (serverTasks) {
+        const nextTasks =
+          titleToId.size === 0
+            ? serverTasks
+            : serverTasks.map((t) => {
+                const legacyName = t.label_id ? legacyLabelNameById[t.label_id] : null;
+                const newId = legacyName ? titleToId.get(legacyName) : null;
+                return newId ? { ...t, label_id: newId } : t;
+              });
+        setTasks(nextTasks);
+      }
     })().catch(console.error);
   }, []);
 
