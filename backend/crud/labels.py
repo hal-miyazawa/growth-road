@@ -12,11 +12,11 @@ def list_labels(db: Session):
 def get_label(db: Session, label_id: str):
     return db.query(Label).filter(Label.id == label_id).first()
 
-def get_label_by_name(db: Session, name: str):
-    return db.query(Label).filter(Label.name == name).first()
+def get_label_by_title(db: Session, title: str):
+    return db.query(Label).filter(Label.title == title).first()
 
 def create_label(db: Session, payload: LabelCreate):
-    obj = Label(name=payload.name, color=payload.color)
+    obj = Label(title=payload.title, color=payload.color)
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -27,8 +27,8 @@ def update_label(db: Session, label_id: str, payload: LabelUpdate):
     if not obj:
         return None
 
-    if payload.name is not None:
-        obj.name = payload.name
+    if payload.title is not None:
+        obj.title = payload.title
     if payload.color is not None:
         obj.color = payload.color
 

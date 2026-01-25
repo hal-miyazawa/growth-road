@@ -14,7 +14,8 @@ class Label(Base):
         index=True,
         default=lambda: f"label-{uuid.uuid4()}",  # ★追加
     )
-    name = Column(String, nullable=False, unique=True)
+    # Map DB column "name" to Python attribute "title".
+    title = Column("name", String, nullable=False, unique=True)
     color = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

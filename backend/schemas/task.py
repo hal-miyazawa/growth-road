@@ -10,6 +10,7 @@ class TaskCreate(BaseModel):
     order_index: int = 0
     memo: Optional[str] = None
     completed: bool = False
+    completed_at: Optional[datetime] = None
     is_fixed: bool = False
     is_group: bool = False
 
@@ -24,6 +25,7 @@ class TaskRead(BaseModel):
     order_index: int
     memo: Optional[str] = None
     completed: bool
+    completed_at: Optional[datetime] = None
     is_fixed: bool
     is_group: bool
     created_at: datetime

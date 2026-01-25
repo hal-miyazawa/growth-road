@@ -2,7 +2,7 @@
 from .labels import (
     list_labels,
     get_label,
-    get_label_by_name,
+    get_label_by_title,
     create_label,
     update_label,
     delete_label,
@@ -11,4 +11,10 @@ from .labels import (
 from .projects import (
     create_project,
     list_projects,
+    list_projects_with_tasks,
+)
+
+from .tasks import (
+    create_task,
+    list_tasks,
 )

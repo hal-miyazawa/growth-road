@@ -1,5 +1,5 @@
 # crud/projects.py
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 import uuid
 
 from models.project import Project
@@ -11,8 +11,9 @@ def _new_id(prefix: str) -> str:
 def create_project(db: Session, payload: ProjectCreate):
     obj = Project(
         id=_new_id("proj"),
-        title=payload.title,                 # ← name じゃなく title
-        label_id=payload.label_id,           # ← schemasに入れたなら getattr不要
+        title=payload.title,                 # ↁEname じゃなぁEtitle
+        label_id=payload.label_id,           # ↁEschemasに入れたなめEgetattr不要E
+        current_order_index=0,
     )
     db.add(obj)
     db.commit()
@@ -20,4 +21,12 @@ def create_project(db: Session, payload: ProjectCreate):
     return obj
 
 def list_projects(db: Session):
-    return db.query(Project).all()
+    return db.query(Project).order_by(Project.created_at.asc()).all()
+
+def list_projects_with_tasks(db: Session):
+    return (
+        db.query(Project)
+        .options(selectinload(Project.tasks))
+        .order_by(Project.created_at.asc())
+        .all()
+    )

@@ -13,6 +13,7 @@ class ProjectRead(BaseModel):
     id: str
     title: str
     label_id: Optional[str] = None
+    current_order_index: int
     created_at: datetime
     updated_at: datetime
 
@@ -22,4 +23,5 @@ class ProjectWithTasks(BaseModel):
     id: str
     title: str
     label_id: Optional[str] = None
+    current_order_index: int
     tasks: List[TaskRead]

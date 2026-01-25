@@ -17,6 +17,7 @@ class Task(Base):
     memo = Column(String, nullable=True)
 
     completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
     is_fixed = Column(Boolean, default=False)
     is_group = Column(Boolean, default=False)
 

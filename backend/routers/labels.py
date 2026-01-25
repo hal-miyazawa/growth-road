@@ -15,9 +15,9 @@ def list_labels(db: Session = Depends(get_db)):
 
 @router.post("", response_model=LabelRead)
 def create_label(payload: LabelCreate, db: Session = Depends(get_db)):
-    exists = crud.get_label_by_name(db, payload.name)
+    exists = crud.get_label_by_title(db, payload.title)
     if exists:
-        raise HTTPException(status_code=400, detail="Label name already exists")
+        raise HTTPException(status_code=400, detail="Label title already exists")
     return crud.create_label(db, payload)
 
 

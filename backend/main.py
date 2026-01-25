@@ -1,16 +1,89 @@
-from fastapi import FastAPI, Depends
+from datetime import datetime
+from pathlib import Path
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
 
-from database import engine, Base, get_db
-import crud
-from schemas import ProjectCreate, ProjectRead, ProjectWithTasks, TaskCreate, TaskRead
-
-# ルータ
+from database import engine, Base, SessionLocal
+from models import Label, Project, Task
 from routers.labels import router as labels_router
+from routers.projects import router as projects_router
+from routers.tasks import router as tasks_router
+from seed_projects_tasks import seed_projects_tasks_if_needed
 
-# テーブル作成のために読み込み
-import models  # ← models/__init__.py が読み込まれて全モデル登録される
+import models
+
+SEED_LABELS = [
+    {
+        "id": "label-2a9168c6-2bd9-4714-8606-8152f74c41af",
+        "title": "資格勉強",
+        "color": "#0047A1",
+        "created_at": "2026-01-25T10:12:35",
+    },
+    {
+        "id": "label-0d19dcb3-7a1e-432b-8b70-1149eb170770",
+        "title": "家事",
+        "color": "#35DCB8",
+        "created_at": "2026-01-25T10:12:41",
+    },
+    {
+        "id": "label-88be2f01-ceec-4033-b1a4-01b974c10457",
+        "title": "仕事",
+        "color": "#0047A1",
+        "created_at": "2026-01-25T10:12:46",
+    },
+    {
+        "id": "label-21ce59b8-a99c-49c4-8dcb-c16679cc03df",
+        "title": "健康",
+        "color": "#A6C93A",
+        "created_at": "2026-01-25T10:12:51",
+    },
+    {
+        "id": "label-18315cc6-bb57-4e55-ada2-6897d2423958",
+        "title": "バイト",
+        "color": "#D6455D",
+        "created_at": "2026-01-25T10:12:55",
+    },
+    {
+        "id": "label-e5a0fb82-41f9-43c8-b393-28034faba0e5",
+        "title": "開発",
+        "color": "#67D08A",
+        "created_at": "2026-01-25T10:12:58",
+    },
+    {
+        "id": "label-d4461be6-aad5-499b-98dc-97e8d715eeea",
+        "title": "お金",
+        "color": "#D0C98A",
+        "created_at": "2026-01-25T10:13:02",
+    },
+]
+
+def seed_if_new_db():
+    db_path = Path("growth_road.db")
+    is_new_db = not db_path.exists()
+
+    # Dev-only: if schema changes (no migrations), delete `backend/growth_road.db` then restart.
+    Base.metadata.create_all(bind=engine)
+
+    if not is_new_db:
+        return
+
+    db = SessionLocal()
+    try:
+        labels = [
+            Label(
+                id=item["id"],
+                title=item["title"],
+                color=item["color"],
+                created_at=datetime.fromisoformat(item["created_at"]),
+            )
+            for item in SEED_LABELS
+        ]
+        db.add_all(labels)
+
+
+        db.commit()
+    finally:
+        db.close()
 
 
 app = FastAPI(title="Growth Road API")
@@ -27,28 +100,20 @@ app.add_middleware(
 )
 
 app.include_router(labels_router, prefix="/api")
+app.include_router(projects_router, prefix="/api")
+app.include_router(tasks_router, prefix="/api")
+
 
 @app.on_event("startup")
 def on_startup():
-    Base.metadata.create_all(bind=engine)
+    seed_if_new_db()
+    db = SessionLocal()
+    try:
+        seed_projects_tasks_if_needed(db)
+    finally:
+        db.close()
+
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-# Project
-@app.post("/projects", response_model=ProjectRead)
-def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
-    return crud.create_project(db, project)
-
-@app.get("/projects", response_model=list[ProjectRead])
-def read_projects(db: Session = Depends(get_db)):
-    return crud.list_projects(db)  # ← ここは君のcrud名に合わせて
-
-@app.post("/tasks", response_model=TaskRead)
-def create_task(task: TaskCreate, db: Session = Depends(get_db)):
-    return crud.create_task(db, task)
-
-@app.get("/projects-with-tasks", response_model=list[ProjectWithTasks])
-def read_projects_with_tasks(db: Session = Depends(get_db)):
-    return crud.get_projects_with_tasks(db)
