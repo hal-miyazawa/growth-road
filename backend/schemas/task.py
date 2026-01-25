@@ -14,6 +14,19 @@ class TaskCreate(BaseModel):
     is_fixed: bool = False
     is_group: bool = False
 
+class TaskUpsert(BaseModel):
+    id: Optional[str] = None
+    title: str
+    project_id: Optional[str] = None
+    label_id: Optional[str] = None
+    parent_task_id: Optional[str] = None
+    order_index: int = 0
+    memo: Optional[str] = None
+    completed: bool = False
+    completed_at: Optional[datetime] = None
+    is_fixed: bool = False
+    is_group: bool = False
+
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     memo: Optional[str] = None

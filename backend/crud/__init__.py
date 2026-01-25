@@ -10,8 +10,11 @@ from .labels import (
 
 from .projects import (
     create_project,
+    delete_project,
     list_projects,
     list_projects_with_tasks,
+    update_project,
+    upsert_project_tasks,
 )
 
 from .tasks import (

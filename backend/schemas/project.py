@@ -6,6 +6,12 @@ from .task import TaskRead
 class ProjectCreate(BaseModel):
     title: str
     label_id: Optional[str] = None
+    current_order_index: Optional[int] = None
+
+class ProjectUpdate(BaseModel):
+    title: Optional[str] = None
+    label_id: Optional[str] = None
+    current_order_index: Optional[int] = None
 
 class ProjectRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
