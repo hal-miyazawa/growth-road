@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/api"; // API ユーティリティをインポート
+import { apiGet, apiPost, apiPatch, apiDelete, apiPut } from "../lib/api";
 import AppLayout from "../layouts/AppLayout";
 import ProjectCard from "../components/ProjectCard/ProjectCard";
 import styles from "./Dashboard.module.scss";
@@ -11,74 +11,12 @@ import type { ID, Label, Project, Task } from "../types/models";
 
 const now = () => new Date().toISOString();
 
-const legacyLabelNameById: Record<string, string> = {
-  "label-study": "資格勉強",
-  "label-home": "家事",
-  "label-work": "仕事",
-  "label-health": "健康",
-  "label-dev": "開発",
-  "label-money": "お金",
-};
+const legacyLabelNameById: Record<string, string> = {};
 
 // --- mock用（本番では DB/API から取得する想定） ---
-const initialProjects: Project[] = [
-  { id: "proj-study", title: "学習", label_id: "label-study", current_order_index: 0, created_at: now(), updated_at: now() },
-  { id: "proj-home",  title: "家事", label_id: "label-home",  current_order_index: 0, created_at: now(), updated_at: now() },
+const initialProjects: Project[] = [];
 
-  // 追加プロジェクト
-  { id: "proj-dev",    title: "卒制", label_id: "label-dev",    current_order_index: 0, created_at: now(), updated_at: now() },
-  { id: "proj-work",   title: "バイト", label_id: "label-work", current_order_index: 0, created_at: now(), updated_at: now() },
-  { id: "proj-health", title: "健康", label_id: "label-health", current_order_index: 0, created_at: now(), updated_at: now() },
-];
-
-const initialTasks: Task[] = [
-  // ======================
-  // 資格勉強
-  // ======================
-  { id: "t1", project_id: "proj-study", label_id: "label-study", parent_task_id: null, order_index: 0, title: "過去問演習（1週目）", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "t2", project_id: "proj-study", label_id: "label-study", parent_task_id: null, order_index: 1, title: "問題整理ミーティング", memo: null, completed: false, completed_at: null, is_fixed: false, is_group: true, created_at: now(), updated_at: now() },
-  { id: "t11", project_id: "proj-study", label_id: "label-study", parent_task_id: "t2", order_index: 0, title: "問題整理 A", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "t12", project_id: "proj-study", label_id: "label-study", parent_task_id: "t2", order_index: 1, title: "問題整理 B", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "t3", project_id: "proj-study", label_id: "label-study", parent_task_id: null, order_index: 2, title: "模擬試験ノート", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-
-  // ======================
-  // 家事
-  // ======================
-  { id: "h1", project_id: "proj-home", label_id: "label-home", parent_task_id: null, order_index: 0, title: "掃除チェック", memo: null, completed: false, completed_at: null, is_fixed: false, is_group: true, created_at: now(), updated_at: now() },
-  { id: "h11", project_id: "proj-home", label_id: "label-home", parent_task_id: "h1", order_index: 0, title: "洗濯・乾燥", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "h2", project_id: "proj-home", label_id: "label-home", parent_task_id: null, order_index: 1, title: "キッチン片付け", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-
-  // ======================
-  // 開発
-  // ======================
-  { id: "d1", project_id: "proj-dev", label_id: "label-dev", parent_task_id: null, order_index: 0, title: "Project改善", memo: "UIと保存処理", completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "d2", project_id: "proj-dev", label_id: "label-dev", parent_task_id: null, order_index: 1, title: "ラベル統一", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "d3", project_id: "proj-dev", label_id: "label-dev", parent_task_id: null, order_index: 2, title: "子タスク追加テスト", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-
-  // ======================
-  // バイト
-  // ======================
-  { id: "w1", project_id: "proj-work", label_id: "label-work", parent_task_id: null, order_index: 0, title: "シフト応募", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "w2", project_id: "proj-work", label_id: "label-work", parent_task_id: null, order_index: 1, title: "来週の予定確認", memo: "ピン留め", completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-
-  // ======================
-  // 健康
-  // ======================
-  { id: "he1", project_id: "proj-health", label_id: "label-health", parent_task_id: null, order_index: 0, title: "ストレッチ", memo: null, completed: false, completed_at: null, is_fixed: false, is_group: true, created_at: now(), updated_at: now() },
-  { id: "he11", project_id: "proj-health", label_id: "label-health", parent_task_id: "he1", order_index: 0, title: "朝ストレッチ", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "he2", project_id: "proj-health", label_id: "label-health", parent_task_id: null, order_index: 1, title: "散歩20分", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-
-  // ======================
-  // ソロタスク（project_id=null）
-  // ======================
-  { id: "solo-1", project_id: null, label_id: "label-home", parent_task_id: null, order_index: 0, title: "買い物メモ", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "solo-2", project_id: null, label_id: "label-work", parent_task_id: null, order_index: 1, title: "メール返信", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-
-  // 追加ソロタスク
-  { id: "solo-4", project_id: null, label_id: "label-home", parent_task_id: null, order_index: 3, title: "ゴミ出し", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "solo-6", project_id: null, label_id: "label-health", parent_task_id: null, order_index: 5, title: "水飲む", memo: "1.5L目標", completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-  { id: "solo-7", project_id: null, label_id: "label-money", parent_task_id: null, order_index: 6, title: "家計メモ", memo: null, completed: false, completed_at: null, is_fixed: false, created_at: now(), updated_at: now() },
-];
+const initialTasks: Task[] = [];
 
 // --- プロジェクトの「未完了のleafタスク（グループは除外）」のID一覧を作る ---
 function buildFlatLeafTaskIds(allTasks: Task[], projectId: ID): ID[] {
@@ -616,43 +554,69 @@ export default function Dashboard() {
           convertTaskTitle={convertSoloTaskTitle}
           convertTaskMemo={convertSoloTaskMemo}
           convertLabelId={convertSoloLabelId}
-          onSave={(project, newTasks) => {
-            // 既存プロジェクトの current_order_index を維持するため、保存前の状況を取得
+          onSave={async (project, newTasks) => {
             const prevProject = projects.find((p) => p.id === project.id) ?? null;
             const prevIndex = prevProject?.current_order_index ?? 0;
             const prevFlat = flatIdsByProject.get(project.id) ?? [];
             const prevCurrentTaskId = prevFlat[prevIndex] ?? null;
 
-            // tasks更新（プロジェクトのタスクを置換）
-            setTasks((prev) => {
-              const withoutThisProject = prev.filter((t) => t.project_id !== project.id);
+            let savedProject: Project | null = null;
+            let savedTasks: Task[] | null = null;
 
-              const newIds = new Set(newTasks.map((t) => t.id));
-              const withoutDupIds = withoutThisProject.filter((t) => !newIds.has(t.id));
-
-              return [...withoutDupIds, ...newTasks];
-            });
-
-            // projects更新（存在すれば更新、なければ追加）
-            setProjects((prev) => {
-              const exists = prev.some((p) => p.id === project.id);
-
-              const nextIndex =
-                prevCurrentTaskId ? newTasks.findIndex((t) => t.id === prevCurrentTaskId) : -1;
-
-              const safeIndex =
-                nextIndex >= 0 ? nextIndex : Math.min(prevIndex, Math.max(0, newTasks.length - 1));
-
-              const nextProject: Project = {
-                ...project,
-                current_order_index: safeIndex,
-                updated_at: now(),
+            try {
+              const projectPayload = {
+                title: project.title,
+                label_id: project.label_id ?? null,
+                current_order_index: project.current_order_index,
               };
 
-              return exists
-                ? prev.map((p) => (p.id === project.id ? nextProject : p))
-                : [nextProject, ...prev];
-            });
+              savedProject = prevProject
+                ? await apiPatch<Project>(`/api/projects/${project.id}`, projectPayload)
+                : await apiPost<Project>("/api/projects", projectPayload);
+
+              const projectId = savedProject.id;
+              const tasksPayload = newTasks.map((t) => ({
+                ...t,
+                project_id: projectId,
+              }));
+
+              savedTasks = await apiPut<Task[]>(
+                `/api/projects/${projectId}/tasks`,
+                tasksPayload
+              );
+            } catch (e) {
+              console.error(e);
+            }
+
+            if (savedProject && savedTasks) {
+              const projectId = savedProject.id;
+              const nextIndex = prevCurrentTaskId
+                ? savedTasks.findIndex((t) => t.id === prevCurrentTaskId)
+                : -1;
+              const safeIndex =
+                nextIndex >= 0
+                  ? nextIndex
+                  : Math.min(prevIndex, Math.max(0, savedTasks.length - 1));
+
+              const nextProject: Project = {
+                ...savedProject,
+                current_order_index: safeIndex,
+              };
+
+              setProjects((prev) => {
+                const exists = prev.some((p) => p.id === projectId);
+                return exists
+                  ? prev.map((p) => (p.id === projectId ? nextProject : p))
+                  : [nextProject, ...prev];
+              });
+
+              setTasks((prev) => {
+                const withoutThisProject = prev.filter(
+                  (t) => t.project_id !== projectId
+                );
+                return [...withoutThisProject, ...savedTasks];
+              });
+            }
 
             setProjectOpen(false);
             setEditingProjectId(null);
@@ -660,13 +624,20 @@ export default function Dashboard() {
             setConvertSoloTaskTitle("");
             setConvertSoloTaskMemo(null);
           }}
-          onDelete={(projectId) => {
-            // プロジェクト配下タスクを削除
-            setTasks((prev) => prev.filter((t) => t.project_id !== projectId));
-            // プロジェクトを削除
-            setProjects((prev) => prev.filter((p) => p.id !== projectId));
+          onDelete={async (projectId) => {
+            let deleted = false;
+            try {
+              await apiDelete(`/api/projects/${projectId}`);
+              deleted = true;
+            } catch (e) {
+              console.error(e);
+            }
 
-            // モーダル閉じる
+            if (deleted) {
+              setTasks((prev) => prev.filter((t) => t.project_id !== projectId));
+              setProjects((prev) => prev.filter((p) => p.id !== projectId));
+            }
+
             setProjectOpen(false);
             setEditingProjectId(null);
             setConvertSoloTaskId(null);

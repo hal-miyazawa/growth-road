@@ -33,3 +33,13 @@ export async function apiPatch<T>(path: string, body: any): Promise<T> {
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
+
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
