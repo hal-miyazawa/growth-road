@@ -1,8 +1,16 @@
 import { useState } from "react";
-import type * as React from "react";
+import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-import styles from "./Signup.module.scss";
+
+import { ApiError, apiPost } from "../lib/api";
+import styles from "./Login/Login.module.scss";
+
+type SignupResponse = {
+  id: string;
+  email: string;
+  created_at: string;
+};
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -11,9 +19,10 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -24,23 +33,27 @@ export default function SignupPage() {
       return;
     }
 
-    if (password.length < 4) {
-      setError("パスワードは4文字以上で入力してください");
+    if (password.length < 8) {
+      setError("パスワードは8文字以上で入力してください");
       return;
     }
 
-    // ローカル登録：localStorageに保存して成功扱い
-    const users = JSON.parse(localStorage.getItem("mock_users") || "[]");
-    const existingUser = users.find((u: { email: string }) => u.email === email);
-
-    if (existingUser) {
-      setError("このメールアドレスは既に登録されています");
-      return;
+    try {
+      setIsSubmitting(true);
+      await apiPost<SignupResponse>("/api/auth/signup", {
+        email,
+        password,
+      });
+      navigate("/login");
+    } catch (err) {
+      if (err instanceof ApiError && err.status == 409) {
+        setError("このメールアドレスは既に登録されています");
+      } else {
+        setError("新規登録に失敗しました。時間をおいて再度お試しください");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    users.push({ email, password });
-    localStorage.setItem("mock_users", JSON.stringify(users));
-    navigate("/login");
   };
 
   return (
@@ -89,7 +102,7 @@ export default function SignupPage() {
                 <button
                   type="button"
                   className={styles.togglePassword}
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -115,10 +128,8 @@ export default function SignupPage() {
                 <button
                   type="button"
                   className={styles.togglePassword}
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  aria-label={
-                    showConfirmPassword ? "パスワードを隠す" : "パスワードを表示"
-                  }
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  aria-label={showConfirmPassword ? "パスワードを隠す" : "パスワードを表示"}
                 >
                   {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -127,11 +138,11 @@ export default function SignupPage() {
           </div>
 
           <div className={styles.footer}>
-            <button type="submit" className={styles.submitButton}>
-              登録する
+            <button type="submit" className={styles.submitButton} disabled={isSubmitting}>
+              {isSubmitting ? "登録中..." : "登録する"}
             </button>
 
-            <p className={styles.loginLink}>
+            <p className={styles.signupLink}>
               すでにアカウントをお持ちの方は <Link to="/login">ログインへ</Link>
             </p>
           </div>

@@ -9,7 +9,7 @@ type RequireAuthProps = {
 };
 
 function RequireAuth({ children }: RequireAuthProps) {
-  const authed = localStorage.getItem("mock_auth") === "1";
+  const authed = Boolean(localStorage.getItem("access_token"));
   return authed ? <>{children}</> : <Navigate to="/login" replace />;
 }
 

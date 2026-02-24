@@ -4,7 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base, SessionLocal
-from models import Label, Project, Task
+from dependencies import get_password_hash
+from models import Label, Project, Task, User
+from routers.auth import router as auth_router
 from routers.labels import router as labels_router
 from routers.projects import router as projects_router
 from routers.tasks import router as tasks_router
@@ -57,11 +59,17 @@ SEED_LABELS = [
     },
 ]
 
+DEFAULT_DEV_USER_ID = "dev-user"
+DEFAULT_DEV_USER_EMAIL = "dev@example.com"
+# Dev-only seed credential used only when creating a brand-new local DB.
+DEFAULT_DEV_USER_PASSWORD = "dev-password"
+
 def seed_if_new_db():
     db_path = Path("growth_road.db")
     is_new_db = not db_path.exists()
 
-    # Dev-only: if schema changes (no migrations), delete `backend/growth_road.db` then restart.
+    # Dev-only: no migrations. If schema changes (e.g. auth/user columns added),
+    # delete `backend/growth_road.db` then restart.
     Base.metadata.create_all(bind=engine)
 
     if not is_new_db:
@@ -69,9 +77,18 @@ def seed_if_new_db():
 
     db = SessionLocal()
     try:
+        db.add(
+            User(
+                id=DEFAULT_DEV_USER_ID,
+                email=DEFAULT_DEV_USER_EMAIL,
+                password_hash=get_password_hash(DEFAULT_DEV_USER_PASSWORD),
+            )
+        )
+
         labels = [
             Label(
                 id=item["id"],
+                user_id=DEFAULT_DEV_USER_ID,
                 title=item["title"],
                 color=item["color"],
                 created_at=datetime.fromisoformat(item["created_at"]),
@@ -102,6 +119,7 @@ app.add_middleware(
 app.include_router(labels_router, prefix="/api")
 app.include_router(projects_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 
 
 @app.on_event("startup")
@@ -109,7 +127,7 @@ def on_startup():
     seed_if_new_db()
     db = SessionLocal()
     try:
-        seed_projects_tasks_if_needed(db)
+        seed_projects_tasks_if_needed(db, user_id=DEFAULT_DEV_USER_ID)
     finally:
         db.close()
 

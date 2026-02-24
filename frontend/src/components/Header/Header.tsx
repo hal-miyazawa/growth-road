@@ -44,8 +44,8 @@ export default function Header({
     return () => document.removeEventListener("mousedown", onDown, true);
   }, [userMenuOpen]);
 
-  // 今は mock_auth でログイン判定してる前提（将来ここは実認証に差し替え）
-  const authed = localStorage.getItem("mock_auth") === "1";
+  // 認証は Bearer トークンの保存有無で判定
+  const authed = Boolean(localStorage.getItem("access_token"));
 
   return (
     <header className={styles.header}>

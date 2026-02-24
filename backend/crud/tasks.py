@@ -1,7 +1,8 @@
 # crud/tasks.py
 from datetime import datetime
-from sqlalchemy.orm import Session
 import uuid
+
+from sqlalchemy.orm import Session
 
 from models.task import Task
 from schemas import TaskCreate, TaskUpdate
@@ -11,9 +12,10 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4()}"
 
 
-def create_task(db: Session, payload: TaskCreate):
+def create_task(db: Session, payload: TaskCreate, user_id: str):
     obj = Task(
         id=_new_id("task"),
+        user_id=user_id,
         title=payload.title,
         project_id=payload.project_id,
         label_id=payload.label_id,
@@ -31,12 +33,12 @@ def create_task(db: Session, payload: TaskCreate):
     return obj
 
 
-def get_task(db: Session, task_id: str):
-    return db.query(Task).filter(Task.id == task_id).first()
+def get_task(db: Session, task_id: str, user_id: str):
+    return db.query(Task).filter(Task.id == task_id, Task.user_id == user_id).first()
 
 
-def update_task(db: Session, task_id: str, payload: TaskUpdate):
-    obj = get_task(db, task_id)
+def update_task(db: Session, task_id: str, payload: TaskUpdate, user_id: str):
+    obj = get_task(db, task_id, user_id)
     if not obj:
         return None
 
@@ -51,13 +53,13 @@ def update_task(db: Session, task_id: str, payload: TaskUpdate):
     return obj
 
 
-def delete_task(db: Session, task_id: str) -> str:
+def delete_task(db: Session, task_id: str, user_id: str) -> str:
     """
     return:
       - "deleted"
       - "not_found"
     """
-    obj = get_task(db, task_id)
+    obj = get_task(db, task_id, user_id)
     if not obj:
         return "not_found"
 
@@ -66,5 +68,10 @@ def delete_task(db: Session, task_id: str) -> str:
     return "deleted"
 
 
-def list_tasks(db: Session):
-    return db.query(Task).order_by(Task.created_at.asc()).all()
+def list_tasks(db: Session, user_id: str):
+    return (
+        db.query(Task)
+        .filter(Task.user_id == user_id)
+        .order_by(Task.created_at.asc())
+        .all()
+    )
