@@ -7,6 +7,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     project_id = Column(String, ForeignKey("projects.id"), nullable=True)
     label_id = Column(String, ForeignKey("labels.id"), nullable=True)
 
@@ -24,5 +25,6 @@ class Task(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    user = relationship("User", back_populates="tasks")
     project = relationship("Project", back_populates="tasks")
     label = relationship("Label", back_populates="tasks")

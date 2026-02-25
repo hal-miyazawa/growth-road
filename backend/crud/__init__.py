@@ -24,3 +24,9 @@ from .tasks import (
     list_tasks,
     update_task,
 )
+
+from .users import (
+    create_user,
+    get_user_by_email,
+    get_user_by_id,
+)

@@ -54,7 +54,7 @@ export default function AppLayout({
         onLoginClick={() => navigate("/login")}
         onSignupClick={() => navigate("/signup")}
         onLogoutClick={() => {
-          localStorage.removeItem("mock_auth");
+          localStorage.removeItem("access_token");
           navigate("/login");
         }}
       />

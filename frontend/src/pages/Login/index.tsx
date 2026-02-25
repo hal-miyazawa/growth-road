@@ -1,28 +1,46 @@
 import { useState } from "react";
-import type * as React from "react";
+import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
+
+import { ApiError, apiPost } from "../../lib/api";
 import styles from "./Login.module.scss";
+
+type LoginResponse = {
+  access_token: string;
+  token_type: string;
+};
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
 
     if (!email || !password) return;
 
-    // ローカル認証：test@gmail.com / 0000 のみ成功
-    if (email === "test@gmail.com" && password === "0000") {
-      localStorage.setItem("mock_auth", "1");
+    try {
+      setIsSubmitting(true);
+      const payload = await apiPost<LoginResponse>("/api/auth/login", {
+        email,
+        password,
+      });
+      localStorage.setItem("access_token", payload.access_token);
       navigate("/");
-    } else {
-      setError("メールアドレスまたはパスワードが正しくありません");
+    } catch (err) {
+      if (err instanceof ApiError && err.status == 401) {
+        setError("メールアドレスまたはパスワードが正しくありません");
+      } else {
+        setError("ログインに失敗しました。時間をおいて再度お試しください");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -71,7 +89,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   className={styles.togglePassword}
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -80,12 +98,11 @@ export default function LoginPage() {
             </div>
           </div>
           <div className={styles.footer}>
-            <button type="submit" className={styles.submitButton}>
-              ログイン
+            <button type="submit" className={styles.submitButton} disabled={isSubmitting}>
+              {isSubmitting ? "ログイン中..." : "ログイン"}
             </button>
             <p className={styles.signupLink}>
-              アカウントをお持ちでない方は{" "}
-              <Link to="/signup">新規登録へ</Link>
+              アカウントをお持ちでない方は <Link to="/signup">新規登録へ</Link>
             </p>
           </div>
         </form>

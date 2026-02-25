@@ -19,11 +19,18 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4()}"
 
 
-def seed_projects_tasks_if_needed(db: Session) -> None:
-    if db.query(Project).first() is not None or db.query(Task).first() is not None:
+def seed_projects_tasks_if_needed(db: Session, user_id: str = "dev-user") -> None:
+    if (
+        db.query(Project).filter(Project.user_id == user_id).first() is not None
+        or db.query(Task).filter(Task.user_id == user_id).first() is not None
+    ):
         return
 
-    label_by_title = {label.title: label.id for label in db.query(Label).all() if label.title}
+    label_by_title = {
+        label.title: label.id
+        for label in db.query(Label).filter(Label.user_id == user_id).all()
+        if label.title
+    }
 
     label_titles = {
         "study": "資格勉強",
@@ -73,6 +80,7 @@ def seed_projects_tasks_if_needed(db: Session) -> None:
     projects = [
         Project(
             id=item["id"],
+            user_id=user_id,
             title=item["title"],
             label_id=label_id_for(item["label_key"]),
             current_order_index=0,
@@ -97,6 +105,7 @@ def seed_projects_tasks_if_needed(db: Session) -> None:
         tasks.append(
             Task(
                 id=task_id,
+                user_id=user_id,
                 title=title,
                 project_id=project_id,
                 label_id=label_id,
