@@ -2,6 +2,284 @@
   padding: 50px  0px 0px 200px;
 }
 
+.pageAnalytics {
+  padding-top: 24px;
+  padding-left: 104px;
+  padding-right: 24px;
+}
+
+.analytics {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-right: 24px;
+  align-items: center;
+}
+
+.analyticsHero {
+  width: min(1100px, 100%);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.analyticsEyebrow,
+.sectionEyebrow {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #5c6573;
+}
+
+.analyticsTitle,
+.sectionTitle {
+  margin: 0;
+  color: #17191d;
+}
+
+.analyticsTitle {
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.analyticsAdvice {
+  margin: 0;
+  max-width: 680px;
+  color: #4f5865;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.analyticsAdviceGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.analyticsAdvice strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #17191d;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.analyticsAdvice span {
+  display: block;
+}
+
+.analyticsAdvice {
+  padding: 16px 18px;
+  border: 1px solid #d8dde4;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(24, 28, 35, 0.05);
+}
+
+.analyticsCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+  width: min(1100px, 100%);
+}
+
+.metricCard,
+.progressCard,
+.chartCard {
+  border: 1px solid #e1e5ea;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(24, 28, 35, 0.06);
+}
+
+.metricCard {
+  min-height: 140px;
+  padding: 20px 22px;
+  text-align: center;
+}
+
+.metricLabel,
+.metricSub,
+.sectionMeta,
+.progressNote,
+.progressAlert {
+  margin: 0;
+}
+
+.metricLabel {
+  text-align: left;
+  color: #697384;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.metricValue {
+  display: block;
+  margin-top: 18px;
+  color: #181b20;
+  font-size: 36px;
+  line-height: 1;
+}
+
+.metricSub {
+  display: block;
+  margin-top: 10px;
+  color: #6f7888;
+  font-size: 13px;
+}
+
+.analyticsRow {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: min(1100px, 100%);
+}
+
+.progressCard,
+.chartCard {
+  padding: 22px;
+  width: 100%;
+}
+
+.chartCard {
+  margin-bottom: 24px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionMeta {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #eef1f5;
+  color: #556070;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.progressNumbers {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+
+  strong {
+    color: #171a1f;
+    font-size: 44px;
+    line-height: 1;
+  }
+
+  span {
+    color: #67707e;
+    font-size: 13px;
+  }
+}
+
+.progressBar {
+  width: 100%;
+  height: 14px;
+  margin-top: 18px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e8ee;
+}
+
+.progressBarFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2b2f36, #6b7280);
+}
+
+.progressNote {
+  margin-top: 14px;
+  color: #4b5563;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.progressAlert {
+  margin-top: 8px;
+  color: #7f1d1d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chartSelect {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #d5d9e0;
+  border-radius: 10px;
+  background: #fff;
+  color: #252a32;
+}
+
+.chartFrame {
+  position: relative;
+  height: 320px;
+  margin-top: 24px;
+  padding: 24px 10px 38px;
+  border-radius: 18px;
+  background:
+    linear-gradient(to top, rgba(221, 225, 231, 0.85) 1px, transparent 1px) 0 0 / 100% 25%,
+    linear-gradient(180deg, #f9fafb, #f1f4f7);
+}
+
+.chartSvg {
+  position: absolute;
+  inset: 24px 10px 38px;
+  width: calc(100% - 20px);
+  height: calc(100% - 62px);
+  overflow: visible;
+}
+
+.chartLine {
+  fill: none;
+  stroke: #1f2329;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chartPointWrap {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.chartValue {
+  min-height: 16px;
+  color: #6e7786;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chartXAxis {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  height: 18px;
+}
+
+.chartTick {
+  position: absolute;
+  transform: translateX(-50%);
+  color: #6b7483;
+  font-size: 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .grid {
   display: grid;
   gap: 28px;
@@ -55,5 +333,32 @@
 
 .historyMenuDanger {
   color: #b00020;
+}
+
+@media (max-width: 900px) {
+  .page {
+    padding: 24px 16px 0 16px;
+  }
+
+  .analytics {
+    padding-right: 0;
+  }
+
+  .analyticsTitle {
+    font-size: 24px;
+  }
+
+  .analyticsCards {
+    grid-template-columns: 1fr;
+  }
+
+  .analyticsAdviceGroup {
+    grid-template-columns: 1fr;
+  }
+
+  .chartFrame {
+    height: 260px;
+    padding-inline: 4px;
+  }
 }
 

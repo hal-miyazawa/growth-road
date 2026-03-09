@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost, apiPatch, apiDelete, apiPut } from "../lib/api";
 import AppLayout from "../layouts/AppLayout";
 import ProjectCard from "../components/ProjectCard/ProjectCard";
@@ -10,10 +10,75 @@ import { LabelRenameContext } from "../components/Sidebar/Sidebar";
 import type { ID, Label, Project, Task } from "../types/models";
 
 type SortKey = "created_at" | "updated_at";
+type AnalyticsPeriod = "7d" | "30d";
+type DemoAnalyticsRecord = {
+  id: string;
+  labelTitle: string;
+  dueOffsetDays: number;
+  completedOffsetDays: number | null;
+};
+type DemoProgressSummary = {
+  completionRate: number;
+  completed: number;
+  pending: number;
+  overdue: number;
+  label: string;
+};
 
 const now = () => new Date().toISOString();
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const legacyLabelNameById: Record<string, string> = {};
+const demoAnalyticsRecords: DemoAnalyticsRecord[] = [
+  { id: "a-1", labelTitle: "学習", dueOffsetDays: -18, completedOffsetDays: -19 },
+  { id: "a-2", labelTitle: "学習", dueOffsetDays: -16, completedOffsetDays: -16 },
+  { id: "a-3", labelTitle: "生活", dueOffsetDays: -14, completedOffsetDays: -13 },
+  { id: "a-4", labelTitle: "仕事", dueOffsetDays: -12, completedOffsetDays: -11 },
+  { id: "a-5", labelTitle: "学習", dueOffsetDays: -10, completedOffsetDays: -9 },
+  { id: "a-6", labelTitle: "資格", dueOffsetDays: -8, completedOffsetDays: -8 },
+  { id: "a-7", labelTitle: "生活", dueOffsetDays: -7, completedOffsetDays: -6 },
+  { id: "a-8", labelTitle: "学習", dueOffsetDays: -6, completedOffsetDays: -5 },
+  { id: "a-9", labelTitle: "仕事", dueOffsetDays: -5, completedOffsetDays: null },
+  { id: "a-10", labelTitle: "学習", dueOffsetDays: -4, completedOffsetDays: -4 },
+  { id: "a-11", labelTitle: "生活", dueOffsetDays: -3, completedOffsetDays: null },
+  { id: "a-12", labelTitle: "学習", dueOffsetDays: -2, completedOffsetDays: -2 },
+  { id: "a-13", labelTitle: "資格", dueOffsetDays: -1, completedOffsetDays: -1 },
+  { id: "a-14", labelTitle: "仕事", dueOffsetDays: 1, completedOffsetDays: null },
+  { id: "a-15", labelTitle: "学習", dueOffsetDays: 2, completedOffsetDays: null },
+  { id: "a-16", labelTitle: "生活", dueOffsetDays: 4, completedOffsetDays: null },
+  { id: "a-17", labelTitle: "学習", dueOffsetDays: 6, completedOffsetDays: null },
+  { id: "a-18", labelTitle: "資格", dueOffsetDays: 9, completedOffsetDays: null },
+  { id: "a-19", labelTitle: "仕事", dueOffsetDays: 12, completedOffsetDays: null },
+  { id: "a-20", labelTitle: "学習", dueOffsetDays: 16, completedOffsetDays: null },
+  { id: "a-21", labelTitle: "生活", dueOffsetDays: 20, completedOffsetDays: null },
+  { id: "a-22", labelTitle: "学習", dueOffsetDays: 24, completedOffsetDays: null },
+  { id: "a-23", labelTitle: "資格", dueOffsetDays: 27, completedOffsetDays: null },
+  { id: "a-24", labelTitle: "仕事", dueOffsetDays: 29, completedOffsetDays: null },
+];
+const demoProgressSummaryByPeriod: Record<AnalyticsPeriod, DemoProgressSummary> = {
+  "7d": {
+    completionRate: 70,
+    completed: 7,
+    pending: 3,
+    overdue: 2,
+    label: "直近7日",
+  },
+  "30d": {
+    completionRate: 90,
+    completed: 27,
+    pending: 3,
+    overdue: 1,
+    label: "直近30日",
+  },
+};
+const demoTrendCountsByPeriod: Record<AnalyticsPeriod, number[]> = {
+  "7d": [0, 3, 1, 4, 0, 2, 4],
+  "30d": [
+    0, 2, 1, 4, 0, 3, 2, 1, 4, 2,
+    0, 3, 1, 2, 4, 0, 2, 3, 1, 4,
+    2, 0, 3, 1, 2, 4, 1, 0, 3, 2,
+  ],
+};
 
 // --- mock用（本番では DB/API から取得する想定） ---
 const initialProjects: Project[] = [];
@@ -92,13 +157,19 @@ function findLabel(labels: Label[], labelId?: ID | null) {
   return labels.find((l) => l.id === labelId) ?? null;
 }
 
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 export default function Dashboard() {
   const [taskOpen, setTaskOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<ID | null>(null);
   const [selectedLabelId, setSelectedLabelId] = useState<ID | null>(null);
-  const [viewMode, setViewMode] = useState<"active" | "history">("active");
+  const [viewMode, setViewMode] = useState<"active" | "history" | "analytics">("active");
   const [historyMenuOpenId, setHistoryMenuOpenId] = useState<ID | null>(null);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>("7d");
+  const [progressPeriod, setProgressPeriod] = useState<AnalyticsPeriod>("7d");
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
   const [convertSoloTaskId, setConvertSoloTaskId] = useState<ID | null>(null);
   const [convertSoloTaskTitle, setConvertSoloTaskTitle] = useState("");
@@ -116,6 +187,7 @@ export default function Dashboard() {
 
   // モーダルで編集中のタスクID
   const [editingTaskId, setEditingTaskId] = useState<ID | null>(null);
+  const [analyticsAnchor] = useState(() => startOfDay(new Date()));
 
   // task検索用
   const taskById = useMemo(() => new Map<ID, Task>(tasks.map((t) => [t.id, t])), [tasks]);
@@ -367,6 +439,81 @@ export default function Dashboard() {
       });
   }, [tasks, labels, projects]);
 
+  const analytics = useMemo(() => {
+    const anchorMs = analyticsAnchor.getTime();
+    const periodDays = analyticsPeriod === "7d" ? 7 : 30;
+    const records = demoAnalyticsRecords.map((record) => ({
+      ...record,
+      dueAt: anchorMs + record.dueOffsetDays * DAY_MS,
+      completedAt:
+        record.completedOffsetDays === null
+          ? null
+          : anchorMs + record.completedOffsetDays * DAY_MS,
+    }));
+    const completedLast7 = records.filter((record) => {
+      if (record.completedAt === null) return false;
+      return record.completedAt >= anchorMs - 6 * DAY_MS && record.completedAt < anchorMs + DAY_MS;
+    }).length;
+    const totalCompleted = records.filter((record) => record.completedAt !== null).length;
+    const activeCount = records.filter((record) => record.completedAt === null).length;
+
+    const labelCompletedCounts = new Map<string, number>();
+    for (const record of records) {
+      if (record.completedAt === null) continue;
+      labelCompletedCounts.set(
+        record.labelTitle,
+        (labelCompletedCounts.get(record.labelTitle) ?? 0) + 1
+      );
+    }
+
+    const topLabelEntry =
+      [...labelCompletedCounts.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["未分類", 0];
+
+    const demoTrendCounts = demoTrendCountsByPeriod[analyticsPeriod];
+    const trendPoints = Array.from({ length: periodDays }, (_, index) => {
+      const dayStart = anchorMs - (periodDays - 1 - index) * DAY_MS;
+
+      return {
+        key: `${periodDays}-${index}`,
+        label: new Date(dayStart).toLocaleDateString("ja-JP", {
+          month: "numeric",
+          day: "numeric",
+        }),
+        count: demoTrendCounts[index] ?? 0,
+      };
+    });
+
+    const maxTrendCount = Math.max(1, ...trendPoints.map((point) => point.count));
+    const chartPoints = trendPoints.map((point, index) => {
+      const x = trendPoints.length === 1 ? 50 : (index / (trendPoints.length - 1)) * 100;
+      const y = 88 - (point.count / maxTrendCount) * 64;
+      return { ...point, x, y };
+    });
+    const progressSummary = demoProgressSummaryByPeriod[progressPeriod];
+    const insight =
+      progressSummary.overdue > 0
+        ? `期限を過ぎた未完了タスクが ${progressSummary.overdue} 件あるので、少しだけタスクが溜まり気味です。`
+        : `最近の完了ペースはいい感じです。${analyticsPeriod === "7d" ? "この1週間" : "ここ1か月"}も比較的安定して進められています！`;
+    const nextAction =
+      progressSummary.pending >= progressSummary.completed
+        ? "まずはすぐ終わりそうなタスクを1つ片づけると、流れを戻しやすいです。"
+        : `今よく進んでいる「${topLabelEntry[0]}」の流れはそのままで大丈夫です。次は学校ラベルに手をつけると、全体のバランスが良くなります！`;
+
+    return {
+      insight,
+      nextAction,
+      completedLast7,
+      totalCompleted,
+      activeCount,
+      topLabelTitle: topLabelEntry[0],
+      topLabelCount: topLabelEntry[1],
+      progressSummary,
+      trendPoints,
+      chartPoints,
+      maxTrendCount,
+    };
+  }, [analyticsAnchor, analyticsPeriod, progressPeriod]);
+
   useEffect(() => {
     if (!historyMenuOpenId) return;
 
@@ -494,10 +641,167 @@ export default function Dashboard() {
           setHistoryMenuOpenId(null);
           setViewMode("history");
         }}
+        onOpenAnalytics={() => {
+          setHistoryMenuOpenId(null);
+          setViewMode("analytics");
+        }}
       >
-        <div className={styles.page}>
-          <div className={styles.grid}>
-            {viewMode === "history"
+        <div
+          className={
+            viewMode === "analytics"
+              ? `${styles.page} ${styles.pageAnalytics}`
+              : styles.page
+          }
+        >
+          {viewMode === "analytics" ? (
+            <section className={styles.analytics}>
+              <div className={styles.analyticsHero}>
+                <p className={styles.analyticsEyebrow}>ANALYTICS</p>
+                <div className={styles.analyticsAdviceGroup}>
+                  <p className={styles.analyticsAdvice}>
+                    <strong>今の傾向</strong>
+                    <span>{analytics.insight}</span>
+                  </p>
+                  <p className={styles.analyticsAdvice}>
+                    <strong>次の一手</strong>
+                    <span>{analytics.nextAction}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className={styles.analyticsCards}>
+                <article className={styles.metricCard}>
+                  <p className={styles.metricLabel}>今週の完了数</p>
+                  <strong className={styles.metricValue}>{analytics.completedLast7}</strong>
+                </article>
+
+                <article className={styles.metricCard}>
+                  <p className={styles.metricLabel}>累計完了数</p>
+                  <strong className={styles.metricValue}>{analytics.totalCompleted}</strong>
+                </article>
+
+                <article className={styles.metricCard}>
+                  <p className={styles.metricLabel}>一番進んでいる領域</p>
+                  <strong className={styles.metricValue}>{analytics.topLabelTitle}</strong>
+                  <span className={styles.metricSub}>{analytics.topLabelCount} 件完了</span>
+                </article>
+              </div>
+
+              <div className={styles.analyticsRow}>
+                <section className={styles.progressCard}>
+                  <div className={styles.sectionHead}>
+                    <div>
+                      <p className={styles.sectionEyebrow}>PROGRESS</p>
+                      <h3 className={styles.sectionTitle}>期間達成率</h3>
+                    </div>
+                    <select
+                      className={styles.chartSelect}
+                      aria-label="達成率の期間"
+                      value={progressPeriod}
+                      onChange={(e) => setProgressPeriod(e.target.value as AnalyticsPeriod)}
+                    >
+                      <option value="7d">直近7日</option>
+                      <option value="30d">直近30日</option>
+                    </select>
+                  </div>
+
+                  <div className={styles.progressNumbers}>
+                    <strong>{analytics.progressSummary.completionRate}%</strong>
+                    <span>
+                      完了 {analytics.progressSummary.completed} / 未完了 {analytics.progressSummary.pending}
+                    </span>
+                  </div>
+
+                  <div className={styles.progressBar} aria-label="期間達成率">
+                    <div
+                      className={styles.progressBarFill}
+                      style={{ width: `${analytics.progressSummary.completionRate}%` }}
+                    />
+                  </div>
+
+                  <p className={styles.progressNote}>
+                    期間内に未完了のタスクが {analytics.progressSummary.pending} 件あります
+                  </p>
+
+                  {analytics.progressSummary.overdue > 0 && (
+                    <p className={styles.progressAlert}>
+                      ※期限を過ぎた未完了タスクが {analytics.progressSummary.overdue} 件あります
+                    </p>
+                  )}
+                </section>
+
+                <section className={styles.chartCard}>
+                  <div className={styles.sectionHead}>
+                    <div>
+                      <p className={styles.sectionEyebrow}>TREND</p>
+                      <h3 className={styles.sectionTitle}>完了推移</h3>
+                    </div>
+                    <select
+                      className={styles.chartSelect}
+                      aria-label="分析期間"
+                      value={analyticsPeriod}
+                      onChange={(e) => setAnalyticsPeriod(e.target.value as AnalyticsPeriod)}
+                    >
+                      <option value="7d">直近7日</option>
+                      <option value="30d">直近30日</option>
+                    </select>
+                  </div>
+
+                  <div className={styles.chartFrame}>
+                    <svg
+                      className={styles.chartSvg}
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                      aria-hidden="true"
+                    >
+                      <polyline
+                        className={styles.chartLine}
+                        points={analytics.chartPoints
+                          .map((point) => `${point.x},${point.y}`)
+                          .join(" ")}
+                      />
+                    </svg>
+
+                    {analytics.chartPoints.map((point) => {
+                      return (
+                        <div
+                          key={point.key}
+                          className={styles.chartPointWrap}
+                          style={{
+                            left: `${point.x}%`,
+                            top: `${point.y}%`,
+                          }}
+                        >
+                          <span className={styles.chartValue}>{point.count}</span>
+                        </div>
+                      );
+                    })}
+
+                    <div className={styles.chartXAxis}>
+                      {analytics.chartPoints.map((point, index) => {
+                        const showLabel =
+                          analyticsPeriod === "7d" ||
+                          index === analytics.chartPoints.length - 1 ||
+                          index % 5 === 0;
+
+                        return (
+                          <span
+                            key={`${point.key}-label`}
+                            className={styles.chartTick}
+                            style={{ left: `${point.x}%` }}
+                          >
+                            {showLabel ? point.label : ""}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </section>
+          ) : (
+            <div className={styles.grid}>
+              {viewMode === "history"
               ? historyCards.map((c) => (
                   <ProjectCard
                     key={c.id}
@@ -585,10 +889,12 @@ export default function Dashboard() {
                     }
                   />
                 ))}
-          </div>
+            </div>
+          )}
         </div>
 
-        <FabMenu
+        {viewMode === "active" && (
+          <FabMenu
           onCreateTask={() => {
             setEditingTaskId(null);
             setTaskOpen(true);
@@ -597,7 +903,8 @@ export default function Dashboard() {
             setEditingProjectId(null); // 新規作成
             setProjectOpen(true);
           }}
-        />
+          />
+        )}
 
         <TaskModal
           open={taskOpen}

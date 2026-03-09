@@ -8,6 +8,7 @@ type HeaderProps = {
   onMenuClick?: () => void;
   sortKey?: SortKey;
   onSortChange?: (key: SortKey) => void;
+  onAnalyticsClick?: () => void;
 
   // 将来のログイン導線用（今は console.log でもOK）
   onLoginClick?: () => void;
@@ -21,6 +22,7 @@ export default function Header({
   onMenuClick,
   sortKey,
   onSortChange,
+  onAnalyticsClick,
   onLoginClick,
   onSignupClick,
   onAccountSettingsClick,
@@ -65,7 +67,7 @@ export default function Header({
           type="button"
           className={`${styles.iconBtn} ${styles.analysisBtn}`}
           aria-label="分析"
-          onClick={() => console.log("analytics: todo")}
+          onClick={onAnalyticsClick ?? (() => console.log("analytics: todo"))}
         >
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
             <polyline

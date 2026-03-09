@@ -27,6 +27,7 @@ type Props = {
   onSortChange?: (key: SortKey) => void;
 
   onOpenHistory?: () => void;
+  onOpenAnalytics?: () => void;
 };
 
 export default function AppLayout({
@@ -40,6 +41,7 @@ export default function AppLayout({
   sortKey,
   onSortChange,
   onOpenHistory,
+  onOpenAnalytics,
 }: Props) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -51,6 +53,7 @@ export default function AppLayout({
         onMenuClick={() => setOpen((v) => !v)}
         sortKey={sortKey}
         onSortChange={onSortChange}
+        onAnalyticsClick={onOpenAnalytics}
         onLoginClick={() => navigate("/login")}
         onSignupClick={() => navigate("/signup")}
         onLogoutClick={() => {
@@ -68,6 +71,7 @@ export default function AppLayout({
         onAddLabel={onAddLabel}
         onUpdateLabelColor={onUpdateLabelColor}
         onOpenHistory={onOpenHistory}
+        onOpenAnalytics={onOpenAnalytics}
         onDeleteLabel={onDeleteLabel} // ★ここ追加
       />
 

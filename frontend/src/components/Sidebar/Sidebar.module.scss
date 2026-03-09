@@ -84,6 +84,13 @@ $expanded-w: 250px;
   gap: 6px;
 }
 
+.sectionDivider {
+  width: calc(100% - 12px);
+  height: 1px;
+  margin: 6px 6px 2px;
+  background: rgba(17, 24, 39, 0.1);
+}
+
 
 // ==============================
 // ナビゲーションアイテム

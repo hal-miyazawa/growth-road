@@ -12,6 +12,7 @@ type Props = {
   onSelectLabel: (id: ID | null) => void;
 
   onOpenHistory?: () => void;
+  onOpenAnalytics?: () => void;
 
   onAddLabel: (title: string, color: string | null) => void;
   onUpdateLabelColor?: (id: ID, color: string) => void;
@@ -75,6 +76,7 @@ export default function Sidebar({
   selectedLabelId,
   onSelectLabel,
   onOpenHistory,
+  onOpenAnalytics,
   onAddLabel,
   onUpdateLabelColor,
   onDeleteLabel,
@@ -454,6 +456,8 @@ export default function Sidebar({
             </button>
           )}
 
+          <div className={styles.sectionDivider} aria-hidden="true" />
+
           <button
             type="button"
             className={styles.item}
@@ -464,6 +468,33 @@ export default function Sidebar({
           >
             <span className={styles.icon}>🕘</span>
             <span className={styles.label}>履歴</span>
+          </button>
+
+          <button
+            type="button"
+            className={styles.item}
+            onClick={() => {
+              onOpenAnalytics?.();
+              onClose();
+            }}
+          >
+            <span className={styles.icon} aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" focusable="false">
+                <polyline
+                  points="3 16 9 10 13 14 21 6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle cx="3" cy="16" r="1.5" fill="currentColor" />
+                <circle cx="9" cy="10" r="1.5" fill="currentColor" />
+                <circle cx="13" cy="14" r="1.5" fill="currentColor" />
+                <circle cx="21" cy="6" r="1.5" fill="currentColor" />
+              </svg>
+            </span>
+            <span className={styles.label}>分析</span>
           </button>
         </nav>
       </aside>
